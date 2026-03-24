@@ -134,9 +134,10 @@ python3 submit.py \
     [--budget <B>]
 ```
 
-API 인증: 환경변수 또는 `$SKILL_DIR/.env` 파일
+API 인증: `API_KEY`만 설정하면 된다 (API_BASE_URL은 기본값 내장).
+
+환경변수 또는 `$SKILL_DIR/.env` 파일:
 ```
-API_BASE_URL=https://<your-api-host>
 API_KEY=<your-api-key>
 ```
 

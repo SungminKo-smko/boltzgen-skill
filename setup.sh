@@ -66,9 +66,9 @@ if [ ! -f "$SCRIPT_DIR/.env" ]; then
   if [ -f "$SCRIPT_DIR/.env.example" ]; then
     cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
     log ""
-    log "⚠ .env 파일이 생성되었습니다. API 설정을 입력해 주세요:"
+    log "⚠ .env 파일이 생성되었습니다. API_KEY를 입력해 주세요:"
     log "  파일: $SCRIPT_DIR/.env"
-    log "  항목: API_BASE_URL, API_KEY"
+    log "  항목: API_KEY"
   fi
 else
   log ".env: 이미 존재함"

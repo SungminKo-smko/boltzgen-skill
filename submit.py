@@ -49,18 +49,15 @@ def load_env():
                 os.environ.setdefault(k.strip(), v.strip())
 
 
+DEFAULT_API_BASE_URL = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io"
+
+
 def get_config() -> tuple[str, str]:
     load_env()
-    base_url = os.environ.get("API_BASE_URL", "").rstrip("/")
+    base_url = os.environ.get("API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
     api_key = os.environ.get("API_KEY", "")
-    errors = []
-    if not base_url:
-        errors.append("API_BASE_URL is not set (env var or .env file)")
     if not api_key:
-        errors.append("API_KEY is not set (env var or .env file)")
-    if errors:
-        for e in errors:
-            print(f"ERROR: {e}", file=sys.stderr)
+        print("ERROR: API_KEY is not set (env var or .env file)", file=sys.stderr)
         sys.exit(1)
     return base_url, api_key
 

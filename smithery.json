@@ -16,12 +16,8 @@
     "packages": ["httpx>=0.27.0", "pyyaml>=6.0.2"]
   },
   "config": {
-    "API_BASE_URL": {
-      "description": "nanobody-designer MSA API 서버 주소",
-      "required": true
-    },
     "API_KEY": {
-      "description": "x-api-key 인증 키",
+      "description": "x-api-key 인증 키 (API_BASE_URL은 기본값 내장)",
       "required": true
     }
   }
