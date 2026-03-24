@@ -166,6 +166,19 @@ for i in range(60):
 "
 ```
 
+## 잡 취소
+
+실행 중인 잡을 취소할 때:
+```bash
+cd "$SKILL_DIR"
+python3 submit.py cancel <job_id>
+```
+
+예시:
+```bash
+python3 submit.py cancel 11e73881-94a9-4a41-89df-96dd049fca3d
+```
+
 ## Step 4: 결과 출력
 
 - job_id, 최종 status 출력

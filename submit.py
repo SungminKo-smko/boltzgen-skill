@@ -262,12 +262,32 @@ def fetch_artifacts(client: httpx.Client, base_url: str, job_id: str) -> dict[st
 
 
 # ---------------------------------------------------------------------------
+# Cancel job
+# ---------------------------------------------------------------------------
+
+def cancel_job(base_url: str, api_key: str, job_id: str) -> None:
+    """Cancel a running design job."""
+    print(f"Canceling job {job_id}…")
+    with make_client(api_key) as client:
+        resp = client.post(f"{base_url}/v1/design-jobs/{job_id}:cancel")
+        if resp.status_code in (200, 201, 204):
+            print(f"✓ Job canceled: {job_id}")
+        else:
+            print(f"ERROR: Cancel failed (HTTP {resp.status_code}): {resp.text}", file=sys.stderr)
+            sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Submit a BoltzGen design job to the MSA API.")
-    parser.add_argument("--spec", required=True, help="Path to the spec YAML file.")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Default: submit (no subcommand, for backwards compatibility)
+    parser.add_argument("--spec", help="Path to the spec YAML file.")
     parser.add_argument(
         "--structure", action="append", dest="structures", metavar="FILE",
         help="Structure file(s) to upload. Can be specified multiple times."
@@ -275,12 +295,26 @@ def parse_args():
     parser.add_argument("--num-designs", type=int, default=5, help="Number of designs (default: 5).")
     parser.add_argument("--budget", type=int, default=1, help="Budget (default: 1).")
     parser.add_argument("--output-dir", default=".", help="Directory to save artifact list (default: cwd).")
+
+    # cancel subcommand
+    cancel_parser = subparsers.add_parser("cancel", help="Cancel a running design job.")
+    cancel_parser.add_argument("job_id", help="Job ID to cancel.")
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     base_url, api_key = get_config()
+
+    # cancel subcommand
+    if args.command == "cancel":
+        cancel_job(base_url, api_key, args.job_id)
+        return
+
+    if not args.spec:
+        print("ERROR: --spec is required.", file=sys.stderr)
+        sys.exit(1)
 
     spec_path = Path(args.spec)
     if not spec_path.exists():
