@@ -42,7 +42,9 @@ git clone https://github.com/SungminKo-smko/boltzgen-skill "$SKILL_DIR"
 
 의존성 확인:
 ```bash
-python3 -c "import httpx, yaml; print('OK')" 2>&1 || pip3 install httpx pyyaml --break-system-packages -q
+python3 -c "import httpx, yaml; print('OK')" 2>&1 || \
+  (bash "$SKILL_DIR/setup.sh" --quiet 2>&1) || \
+  pip3 install -r "$SKILL_DIR/requirements.txt" --break-system-packages -q
 ```
 
 ## Step 1: 사용자 요구사항 수집

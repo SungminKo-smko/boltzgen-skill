@@ -10,8 +10,25 @@
 
 ## 설치
 
+### Claude Code 전역 스킬로 설치 (권장)
+
 ```bash
-pip install httpx pyyaml
+git clone https://github.com/SungminKo-smko/boltzgen-skill ~/.claude/skills/boltzgen-design
+bash ~/.claude/skills/boltzgen-design/setup.sh
+```
+
+### 로컬 개발
+
+```bash
+git clone https://github.com/SungminKo-smko/boltzgen-skill
+cd boltzgen-skill
+bash setup.sh
+```
+
+### 의존성만 설치
+
+```bash
+pip install -r requirements.txt
 ```
 
 ## 설정
