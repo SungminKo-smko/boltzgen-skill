@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 1.1.0
+version: 1.2.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen spec YAML로
   변환하고, nanobody-designer MSA API에 업로드 → 검증 → 제출 → 상태 추적 → 아티팩트
@@ -23,6 +23,22 @@ allowed-tools:
 ```bash
 git clone https://github.com/SungminKo-smko/boltzgen-skill ~/.claude/skills/boltzgen-design
 ```
+
+## Spec YAML 레퍼런스 로드 (필수)
+
+YAML을 작성하기 전에 항상 레퍼런스 문서를 읽는다:
+
+```bash
+cat "$SKILL_DIR/boltzgen_spec_reference.md"
+```
+
+또는 Read 툴로:
+```
+$SKILL_DIR/boltzgen_spec_reference.md
+```
+
+이 문서에는 모든 YAML 필드, 패턴, 주의사항이 정의되어 있다.
+**YAML 생성 전 반드시 참고할 것.**
 
 ## 초기화 (run first)
 
@@ -65,12 +81,14 @@ python3 -c "import httpx, yaml; print('OK')" 2>&1 || \
 
 **복잡한 케이스** (기존 chain 일부를 재설계하는 경우):
 사용자가 "A chain의 97~114 재설계" 같이 특정 region을 redesign하려 하면,
-`generate_yaml.py` 대신 직접 YAML을 작성한다:
+`generate_yaml.py` 대신 **`$SKILL_DIR/boltzgen_spec_reference.md`를 Read로 읽고**
+적절한 패턴(패턴 2: design_insertions 또는 패턴 3: design)을 적용해 직접 YAML을 작성한다.
 
+레퍼런스의 "패턴 2: 기존 체인 일부 재설계" 예시:
 ```yaml
 entities:
   - file:
-      path: targets/<filename>       # 업로드 relative_path와 일치해야 함
+      path: targets/<filename>
       include:
         - chain:
             id: <target_chain>
