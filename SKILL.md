@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 1.2.0
+version: 1.4.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen spec YAML로
   변환하고, nanobody-designer MSA API에 업로드 → 검증 → 제출 → 상태 추적 → 아티팩트
@@ -163,9 +163,11 @@ python3 submit.py \
 --alpha 0.3                        # 필터링 가중치 (0.0~1.0)
 --no-filter-biased                 # biased 필터링 비활성화
 --additional-filters "ALA_fraction<0.3" "HELIX_fraction>0.2"
+--metrics-override "plddt>0.8"     # 메트릭 오버라이드 표현식
 --inverse-fold-num-sequences 3     # 역접힘 서열 수
+--inverse-fold-avoid C M           # 역접힘에서 제외할 아미노산 (예: Cys, Met)
 --reuse                            # 기존 워커 리소스 재사용
---diffusion-batch-size 4           # 확산 배치 크기
+--diffusion-batch-size 4           # 확산 배치 크기 (GPU VRAM에 맞게 조정)
 --client-request-id <unique-id>    # 중복 제출 방지 (idempotency)
 ```
 
@@ -177,6 +179,14 @@ python3 submit.py \
 ```bash
 python3 "$SKILL_DIR/submit.py" status <job_id>
 ```
+
+### 실시간 로그 스트리밍 (실제 진행률 확인)
+```bash
+python3 "$SKILL_DIR/submit.py" logs <job_id> [--tail 30] [--follow]
+```
+
+> **참고**: `progress_percent` 필드는 ACA log stream에서 실시간으로 읽어오므로
+> `status` 명령과 실제 진행률이 다를 수 있음. `logs`로 정확한 진행률 확인.
 
 ### 잡 목록 조회
 ```bash
@@ -191,6 +201,11 @@ python3 "$SKILL_DIR/submit.py" cancel <job_id>
 ### 사용 가능한 템플릿 목록
 ```bash
 python3 "$SKILL_DIR/submit.py" templates
+```
+
+### 워커 상태 조회 (admin)
+```bash
+python3 "$SKILL_DIR/submit.py" workers
 ```
 
 ## Step 4: 결과 출력

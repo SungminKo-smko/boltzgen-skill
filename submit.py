@@ -9,6 +9,8 @@ Subcommands:
   cancel  <job_id>   Cancel a running job
   templates          List available spec templates
   render             Render a spec from template (nanobody_targeted_binder)
+  logs    <job_id>   Stream worker stdout (real-time progress)
+  workers            List running ACA worker executions (admin)
 
 Environment (or .env file):
   API_KEY            x-api-key authentication header value
@@ -273,10 +275,11 @@ def poll_job(client: httpx.Client, base_url: str, job_id: str) -> dict:
         progress = data.get("progress_percent")
 
         stage_line = stage or status
-        if stage_line != last_stage:
+        state_key = (stage_line, progress)
+        if state_key != last_stage:
             prog_str = f" ({progress}%)" if progress is not None else ""
             print(f"  [{int(elapsed):>4}s] {stage_line}{prog_str}")
-            last_stage = stage_line
+            last_stage = state_key
 
         if status in TERMINAL_STATUSES:
             return data
@@ -406,6 +409,52 @@ def cmd_templates(base_url: str, api_key: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: logs
+# ---------------------------------------------------------------------------
+
+def cmd_logs(base_url: str, api_key: str, job_id: str, tail: int, follow: bool) -> None:
+    """Stream worker stdout from GET /v1/design-jobs/{job_id}/logs."""
+    params: dict = {"tail": tail}
+    if follow:
+        params["follow"] = "true"
+    url = f"{base_url}/v1/design-jobs/{job_id}/logs"
+    with httpx.Client(
+        headers={"x-api-key": api_key},
+        timeout=httpx.Timeout(30.0, read=None),  # read timeout disabled for streaming
+    ) as client:
+        with client.stream("GET", url, params=params) as resp:
+            if resp.status_code == 404:
+                print("No logs available (job may not have started yet or logs expired).")
+                return
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                print(line)
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: workers
+# ---------------------------------------------------------------------------
+
+def cmd_workers(base_url: str, api_key: str) -> None:
+    """List running ACA worker executions from GET /v1/admin/workers."""
+    with make_client(api_key) as client:
+        resp = _request_with_retry(client, "GET", f"{base_url}/v1/admin/workers")
+        data = resp.json()
+
+    workers = data.get("workers", [])
+    total = data.get("total", len(workers))
+    aca_cfg = data.get("aca_configured", False)
+    print(f"Workers ({total} total, ACA configured: {aca_cfg}):")
+    if not workers:
+        print("  (none running)")
+        return
+    print(f"  {'NAME':<40} {'STATUS':<12} START_TIME")
+    print("  " + "-" * 70)
+    for w in workers:
+        print(f"  {w.get('name',''):<40} {w.get('status',''):<12} {w.get('start_time','-')}")
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -420,8 +469,12 @@ def build_runtime_options(args) -> dict:
         opts["filter_biased"] = False
     if hasattr(args, "additional_filters") and args.additional_filters:
         opts["additional_filters"] = args.additional_filters
+    if hasattr(args, "metrics_override") and args.metrics_override:
+        opts["metrics_override"] = args.metrics_override
     if hasattr(args, "inverse_fold_num_sequences") and args.inverse_fold_num_sequences is not None:
         opts["inverse_fold_num_sequences"] = args.inverse_fold_num_sequences
+    if hasattr(args, "inverse_fold_avoid") and args.inverse_fold_avoid:
+        opts["inverse_fold_avoid"] = args.inverse_fold_avoid
     if hasattr(args, "reuse") and args.reuse:
         opts["reuse"] = True
     if hasattr(args, "diffusion_batch_size") and args.diffusion_batch_size is not None:
@@ -435,7 +488,9 @@ def add_runtime_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--alpha", type=float, default=None, help="Filtering weight (0.0–1.0).")
     parser.add_argument("--no-filter-biased", action="store_true", help="Disable biased design filtering.")
     parser.add_argument("--additional-filters", nargs="+", metavar="EXPR", help="Extra filter expressions (e.g. ALA_fraction<0.3).")
+    parser.add_argument("--metrics-override", nargs="+", metavar="EXPR", help="Metrics override expressions.")
     parser.add_argument("--inverse-fold-num-sequences", type=int, default=None, help="Inverse folding sequences per backbone.")
+    parser.add_argument("--inverse-fold-avoid", nargs="+", metavar="AA", help="Amino acids to avoid in inverse folding (e.g. C M).")
     parser.add_argument("--reuse", action="store_true", help="Allow reuse of existing worker resources.")
     parser.add_argument("--diffusion-batch-size", type=int, default=None, help="Diffusion batch size override.")
 
@@ -452,6 +507,8 @@ subcommands:
   list        list jobs
   cancel      cancel a running job
   templates   list available spec templates
+  logs        stream worker stdout (real-time progress)
+  workers     list running ACA worker executions (admin)
         """
     )
     subparsers = parser.add_subparsers(dest="command")
@@ -499,6 +556,15 @@ subcommands:
     # ── templates ───────────────────────────────────────────────────────────
     subparsers.add_parser("templates", help="List available spec templates.")
 
+    # ── logs ─────────────────────────────────────────────────────────────────
+    logs_p = subparsers.add_parser("logs", help="Stream worker stdout (real-time progress).")
+    logs_p.add_argument("job_id", help="Job ID.")
+    logs_p.add_argument("--tail", type=int, default=20, help="Number of recent log lines to show (default: 20).")
+    logs_p.add_argument("--follow", "-f", action="store_true", help="Keep streaming until job ends.")
+
+    # ── workers ──────────────────────────────────────────────────────────────
+    subparsers.add_parser("workers", help="List running ACA worker executions (admin).")
+
     return parser.parse_args()
 
 
@@ -524,6 +590,14 @@ def main():
 
     if args.command == "templates":
         cmd_templates(base_url, api_key)
+        return
+
+    if args.command == "logs":
+        cmd_logs(base_url, api_key, args.job_id, args.tail, args.follow)
+        return
+
+    if args.command == "workers":
+        cmd_workers(base_url, api_key)
         return
 
     if args.command == "render":
