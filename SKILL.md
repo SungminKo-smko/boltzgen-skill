@@ -125,6 +125,29 @@ python3 generate_yaml.py \
 
 ## Step 3: API 제출
 
+API 인증: `API_KEY`만 설정하면 된다 (API_BASE_URL은 기본값 내장).
+환경변수 또는 `$SKILL_DIR/.env` 파일:
+```
+API_KEY=<your-api-key>
+```
+
+### 방법 A: 템플릿 렌더링 (권장 — YAML 불필요)
+
+서버 템플릿 `nanobody_targeted_binder`를 사용하면 generate_yaml.py 없이 바로 제출 가능.
+
+```bash
+cd "$SKILL_DIR"
+python3 submit.py render \
+    --structure "<구조파일경로>" \
+    --include A B \                          # 포함할 체인 ID
+    [--design "A:97..114"] \                 # 재설계 구간 (선택)
+    [--binding "B:317,321,324,325"] \        # 결합 잔기 (선택)
+    [--num-designs <N>] \
+    [--budget <B>]
+```
+
+### 방법 B: Raw YAML 제출 (복잡한 케이스)
+
 ```bash
 cd "$SKILL_DIR"
 python3 submit.py \
@@ -134,49 +157,40 @@ python3 submit.py \
     [--budget <B>]
 ```
 
-API 인증: `API_KEY`만 설정하면 된다 (API_BASE_URL은 기본값 내장).
+### 고급 RuntimeOptions
 
-환경변수 또는 `$SKILL_DIR/.env` 파일:
-```
-API_KEY=<your-api-key>
-```
-
-없으면 사용자에게 설정 요청.
-
-**429 Concurrent job limit 시**: 30초 간격으로 최대 60회 재시도.
-이미 validated spec_id가 있으면 직접 재제출:
 ```bash
-python3 -c "
-import os, json, time
-from pathlib import Path
-import httpx
-for line in Path('$SKILL_DIR/.env').read_text().splitlines():
-    line=line.strip()
-    if line and '=' in line and not line.startswith('#'):
-        k,v=line.split('=',1); os.environ.setdefault(k.strip(),v.strip())
-base_url=os.environ['API_BASE_URL'].rstrip('/')
-api_key=os.environ['API_KEY']
-headers={'x-api-key':api_key,'content-type':'application/json'}
-spec_id='<SPEC_ID>'
-for i in range(60):
-    with httpx.Client(headers=headers,timeout=30) as c:
-        r=c.post(f'{base_url}/v1/design-jobs',content=json.dumps({'validated_spec_id':spec_id,'runtime_options':{'num_designs':<N>,'budget':<B>}}))
-    if r.status_code in(200,201): print('job_id:',r.json()['job_id']); break
-    print(f'[{i+1}] 429 - wait 30s'); time.sleep(30)
-"
+--alpha 0.3                        # 필터링 가중치 (0.0~1.0)
+--no-filter-biased                 # biased 필터링 비활성화
+--additional-filters "ALA_fraction<0.3" "HELIX_fraction>0.2"
+--inverse-fold-num-sequences 3     # 역접힘 서열 수
+--reuse                            # 기존 워커 리소스 재사용
+--diffusion-batch-size 4           # 확산 배치 크기
+--client-request-id <unique-id>    # 중복 제출 방지 (idempotency)
 ```
 
-## 잡 취소
+**429 Concurrent job limit 시**: `--client-request-id`를 동일하게 유지한 채 재시도하면 idempotent_replay로 같은 job_id 반환.
 
-실행 중인 잡을 취소할 때:
+## 잡 관리
+
+### 상태 확인
 ```bash
-cd "$SKILL_DIR"
-python3 submit.py cancel <job_id>
+python3 "$SKILL_DIR/submit.py" status <job_id>
 ```
 
-예시:
+### 잡 목록 조회
 ```bash
-python3 submit.py cancel 11e73881-94a9-4a41-89df-96dd049fca3d
+python3 "$SKILL_DIR/submit.py" list [--status running|succeeded|failed|...] [--limit 20]
+```
+
+### 잡 취소
+```bash
+python3 "$SKILL_DIR/submit.py" cancel <job_id>
+```
+
+### 사용 가능한 템플릿 목록
+```bash
+python3 "$SKILL_DIR/submit.py" templates
 ```
 
 ## Step 4: 결과 출력
