@@ -23,6 +23,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
@@ -121,11 +122,13 @@ def upload_file(client: httpx.Client, base_url: str, file_path: Path) -> str:
     asset_id = data["asset_id"]
     upload_url = data["upload_url"]
 
-    # '#' in blob path is treated as a URL fragment by HTTP clients,
-    # stripping the SAS query string → Azure returns 409 PublicAccessNotPermitted.
-    # Encode '#' → '%23' in the path portion only; leave query string intact.
-    path_part, _, query_part = upload_url.partition("?")
-    safe_upload_url = path_part.replace("#", "%23") + ("?" + query_part if query_part else "")
+    # Percent-encode special characters in the blob path (e.g. #, space, &, ?).
+    # Split on '?' first so the SAS query string is never touched.
+    # urlsplit cannot be used here: it misparses '#' as a fragment boundary,
+    # which would strip the SAS token from the query string.
+    # safe chars: RFC 3986 scheme/netloc/path delimiters that must not be encoded.
+    path_part, sep, query_part = upload_url.partition("?")
+    safe_upload_url = quote(path_part, safe="/:@!$&'()*+,;=.-_~") + sep + query_part
 
     with httpx.Client(timeout=httpx.Timeout(CONNECT_TIMEOUT, read=300.0)) as raw_client:
         with file_path.open("rb") as f:
