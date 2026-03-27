@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 1.4.0
+version: 1.5.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen spec YAML로
   변환하고, nanobody-designer MSA API에 업로드 → 검증 → 제출 → 상태 추적 → 아티팩트
@@ -156,6 +156,40 @@ python3 submit.py \
     [--num-designs <N>] \
     [--budget <B>]
 ```
+
+### 방법 C: MCP Tools 직접 호출 (boltzgen-mcp 설치 시)
+
+`boltzgen-mcp` MCP server가 등록된 경우, Claude가 직접 tool을 호출할 수 있다.
+submit.py 없이 Claude가 네이티브 API 호출로 전체 워크플로를 처리한다.
+
+**MCP 설치:**
+```bash
+git clone https://github.com/SungminKo-smko/boltzgen-mcp ~/workspace/boltzgen-mcp
+pip install -r ~/workspace/boltzgen-mcp/requirements.txt
+# .env 파일 설정
+cp ~/workspace/boltzgen-mcp/.env.example ~/workspace/boltzgen-mcp/.env
+# 편집: API_KEY=<your-api-key>
+
+# Claude Code에 등록
+claude mcp add boltzgen python3 ~/workspace/boltzgen-mcp/server.py
+```
+
+**MCP Tool 호출 순서:**
+1. `upload_structure(file_path)` → `asset_id`
+2. `render_template(asset_id, include, design, binding_types)` → `spec_id`
+   또는 `validate_spec(raw_yaml, asset_ids)` → `spec_id`
+3. `submit_job(spec_id, num_designs, budget, ...)` → `job_id`
+4. `get_job(job_id)` — running 도달 시 세부 정보 출력 후 종료
+   (완료 대기 시 `get_job` 반복 폴링)
+5. `get_artifacts(job_id)` — succeeded 후 아티팩트 URL 조회
+
+**MCP 잡 관리 Tools:**
+- `get_job(job_id)` — 상태 확인
+- `get_logs(job_id, tail=100)` — 로그 조회 (실제 진행률)
+- `list_jobs(status, limit)` — 잡 목록
+- `cancel_job(job_id)` — 잡 취소
+- `list_templates()` — 템플릿 목록
+- `list_workers()` — 워커 상태 (admin)
 
 ### 고급 RuntimeOptions
 

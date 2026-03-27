@@ -1,6 +1,6 @@
 {
   "name": "boltzgen-design",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "나노바디 디자인 자동화: 자연어 요구사항 → BoltzGen spec YAML → MSA API 제출 (업로드 → 검증 → 제출 → 상태 추적 → 아티팩트)",
   "author": "SungminKo-smko",
   "repository": "https://github.com/SungminKo-smko/boltzgen-skill",
