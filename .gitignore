@@ -9,3 +9,6 @@ build/
 spec.yaml
 *_artifacts.json
 results/
+# 구조 파일 (테스트/작업용, 레포에 포함하지 않음)
+*.cif
+*.pdb
