@@ -210,9 +210,19 @@ python3 "$SKILL_DIR/submit.py" workers
 
 ## Step 4: 결과 출력
 
-- job_id, 최종 status 출력
-- 아티팩트 URL 목록 출력
-- 저장된 JSON 파일 경로 안내 (`./results/<job_id>_artifacts.json`)
+잡이 **running** 상태에 도달하면 폴링을 중단하고 세부 정보를 출력한다:
+
+- job_id
+- status / current_stage / progress
+- protocol, num_designs, budget
+- created_at / started_at
+- 이후 확인 명령 안내 (status, logs, cancel)
+
+완료까지 기다려야 하는 경우에만 `--wait` 플래그 추가:
+```bash
+python3 submit.py render ... --wait
+```
+`--wait` 시: 완료 후 아티팩트 URL 출력 및 `./results/<job_id>_artifacts.json` 저장.
 
 ## 오류 처리
 

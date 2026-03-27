@@ -255,9 +255,8 @@ POLL_INTERVAL = 5
 POLL_TIMEOUT = 3600
 
 
-def poll_job(client: httpx.Client, base_url: str, job_id: str) -> dict:
-    """Poll until job reaches a terminal state."""
-    print("Waiting for job to complete…")
+def _poll_loop(client: httpx.Client, base_url: str, job_id: str, stop_on_running: bool) -> dict:
+    """Internal poll loop. If stop_on_running=True, returns as soon as status=='running'."""
     start = time.time()
     last_stage = None
 
@@ -281,10 +280,49 @@ def poll_job(client: httpx.Client, base_url: str, job_id: str) -> dict:
             print(f"  [{int(elapsed):>4}s] {stage_line}{prog_str}")
             last_stage = state_key
 
+        if stop_on_running and status == "running":
+            return data
         if status in TERMINAL_STATUSES:
             return data
 
         time.sleep(POLL_INTERVAL)
+
+
+def wait_until_running(client: httpx.Client, base_url: str, job_id: str) -> dict:
+    """Poll until job is running (or reaches a terminal state), then return."""
+    print("Waiting for job to start…")
+    return _poll_loop(client, base_url, job_id, stop_on_running=True)
+
+
+def poll_job(client: httpx.Client, base_url: str, job_id: str) -> dict:
+    """Poll until job reaches a terminal state."""
+    print("Waiting for job to complete…")
+    return _poll_loop(client, base_url, job_id, stop_on_running=False)
+
+
+def print_job_details(data: dict) -> None:
+    """Print detailed job info after submission."""
+    opts = data.get("runtime_options", {})
+    print("\n" + "=" * 56)
+    print(f"  job_id     : {data['job_id']}")
+    print(f"  status     : {data['status']}")
+    print(f"  protocol   : {data.get('protocol', '-')}")
+    if data.get("current_stage"):
+        progress = data.get("progress_percent")
+        prog_str = f" ({progress}%)" if progress is not None else ""
+        print(f"  stage      : {data['current_stage']}{prog_str}")
+    if data.get("status_message"):
+        print(f"  message    : {data['status_message']}")
+    print(f"  created_at : {data.get('created_at', '-')}")
+    if data.get("started_at"):
+        print(f"  started_at : {data['started_at']}")
+    if opts:
+        print(f"  num_designs: {opts.get('num_designs')}  budget: {opts.get('budget')}")
+    print("=" * 56)
+    print(f"\n진행 중인 작업은 아래 명령으로 확인하세요:")
+    print(f"  python3 submit.py status {data['job_id']}")
+    print(f"  python3 submit.py logs   {data['job_id']} --follow")
+    print(f"  python3 submit.py cancel {data['job_id']}")
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +559,7 @@ subcommands:
     )
     parser.add_argument("--output-dir", default=".", help="Output directory for artifact JSON (default: cwd).")
     parser.add_argument("--client-request-id", default=None, help="Idempotency key for job submission.")
+    parser.add_argument("--wait", action="store_true", help="Wait until job completes (default: return once running).")
     add_runtime_args(parser)
 
     # ── render (template → spec_id → submit) ──────────────────────────────
@@ -535,6 +574,7 @@ subcommands:
                           help="Binding residues (format: 'B:317,321,324').")
     render_p.add_argument("--output-dir", default=".", help="Output directory for artifact JSON.")
     render_p.add_argument("--client-request-id", default=None)
+    render_p.add_argument("--wait", action="store_true", help="Wait until job completes (default: return once running).")
     add_runtime_args(render_p)
 
     # ── status ──────────────────────────────────────────────────────────────
@@ -630,18 +670,27 @@ def main():
             asset_id = upload_file(client, base_url, struct_path)
             spec_id = render_template(client, base_url, asset_id, args.include, design_list, binding_list, None)
             job_id = submit_job(client, base_url, spec_id, build_runtime_options(args), args.client_request_id)
-            final = poll_job(client, base_url, job_id)
-            status = final["status"]
-            if status == "failed":
-                print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
-                sys.exit(1)
-            elif status == "canceled":
-                print("\n✗ Job was canceled.", file=sys.stderr)
-                sys.exit(1)
-            artifacts = fetch_artifacts(client, base_url, job_id)
 
-        print(f"\n✓ Job succeeded: {job_id}")
-        save_and_print_artifacts(artifacts, job_id, args.output_dir)
+            if args.wait:
+                final = poll_job(client, base_url, job_id)
+                status = final["status"]
+                if status == "failed":
+                    print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
+                    sys.exit(1)
+                elif status == "canceled":
+                    print("\n✗ Job was canceled.", file=sys.stderr)
+                    sys.exit(1)
+                artifacts = fetch_artifacts(client, base_url, job_id)
+                print(f"\n✓ Job succeeded: {job_id}")
+                save_and_print_artifacts(artifacts, job_id, args.output_dir)
+            else:
+                final = wait_until_running(client, base_url, job_id)
+                if final["status"] in TERMINAL_STATUSES:
+                    status = final["status"]
+                    if status == "failed":
+                        print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
+                        sys.exit(1)
+                print_job_details(final)
         return
 
     # ── default: raw YAML submit ────────────────────────────────────────────
@@ -667,20 +716,27 @@ def main():
 
         spec_id = validate_spec(client, base_url, yaml_content, asset_ids)
         job_id = submit_job(client, base_url, spec_id, build_runtime_options(args), args.client_request_id)
-        final = poll_job(client, base_url, job_id)
-        status = final["status"]
 
-        if status == "failed":
-            print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
-            sys.exit(1)
-        elif status == "canceled":
-            print("\n✗ Job was canceled.", file=sys.stderr)
-            sys.exit(1)
-
-        artifacts = fetch_artifacts(client, base_url, job_id)
-
-    print(f"\n✓ Job succeeded: {job_id}")
-    save_and_print_artifacts(artifacts, job_id, args.output_dir)
+        if args.wait:
+            final = poll_job(client, base_url, job_id)
+            status = final["status"]
+            if status == "failed":
+                print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
+                sys.exit(1)
+            elif status == "canceled":
+                print("\n✗ Job was canceled.", file=sys.stderr)
+                sys.exit(1)
+            artifacts = fetch_artifacts(client, base_url, job_id)
+            print(f"\n✓ Job succeeded: {job_id}")
+            save_and_print_artifacts(artifacts, job_id, args.output_dir)
+        else:
+            final = wait_until_running(client, base_url, job_id)
+            if final["status"] in TERMINAL_STATUSES:
+                status = final["status"]
+                if status == "failed":
+                    print(f"\n✗ Job failed: {final.get('failure_message', 'no message')}", file=sys.stderr)
+                    sys.exit(1)
+            print_job_details(final)
 
 
 if __name__ == "__main__":
