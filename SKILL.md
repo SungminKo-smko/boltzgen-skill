@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 2.0.0
+version: 2.1.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen API에
   직접 제출하여 업로드 → 렌더링/검증 → 제출 → 상태 추적까지 전체 워크플로를 자동화한다.
@@ -23,27 +23,49 @@ git clone https://github.com/SungminKo-smko/boltzgen-skill ~/.claude/skills/bolt
 
 ## MCP 서버 확인 (run first)
 
-boltzgen MCP 서버가 등록되어 있어야 한다.
-
 ```bash
 claude mcp list 2>/dev/null | grep boltzgen || echo "NOT_REGISTERED"
 ```
 
-**NOT_REGISTERED** 출력 시 사용자에게 안내:
-```
-boltzgen MCP 서버가 등록되지 않았습니다. 먼저 설치해 주세요:
-
+**NOT_REGISTERED** 출력 시:
+```bash
 git clone https://github.com/SungminKo-smko/boltzgen-mcp ~/workspace/boltzgen-mcp
 python3 ~/workspace/boltzgen-mcp/setup.py
 ```
-→ setup.py가 의존성 설치 + API_KEY 설정 + MCP 등록을 자동으로 처리한다.
 
-## Spec YAML 레퍼런스 (복잡한 케이스)
+## Step 0: API KEY 로드
 
-복잡한 YAML이 필요한 경우(`validate_spec` 사용 시) 반드시 참고:
+사용자의 API KEY를 스킬 설정 파일에서 읽는다.
+**API KEY는 사용자가 직접 관리하며, 모든 tool 호출 시 인수로 전달한다.**
 
+```bash
+# 스킬 설정에서 API_KEY 읽기
+SKILL_ENV="$HOME/.claude/skills/boltzgen-design/.env"
+BOLTZGEN_API_KEY=""
+
+if [ -f "$SKILL_ENV" ]; then
+    BOLTZGEN_API_KEY=$(grep -E "^API_KEY=" "$SKILL_ENV" | cut -d= -f2-)
+fi
+
+# 환경변수 fallback
+[ -z "$BOLTZGEN_API_KEY" ] && BOLTZGEN_API_KEY="${BOLTZGEN_API_KEY:-${API_KEY:-}}"
+
+if [ -z "$BOLTZGEN_API_KEY" ]; then
+    echo "ERROR: API_KEY가 설정되지 않았습니다."
+    echo "아래 명령으로 설정해 주세요:"
+    echo "  echo 'API_KEY=<your-key>' > ~/.claude/skills/boltzgen-design/.env"
+    exit 1
+fi
+
+echo "API_KEY: ${BOLTZGEN_API_KEY:0:4}****"
 ```
-$SKILL_DIR/boltzgen_spec_reference.md
+
+이 단계에서 읽은 `BOLTZGEN_API_KEY` 값을 이후 **모든 tool 호출의 `api_key` 인수**로 전달한다.
+
+### API KEY 최초 설정 (미설정 시 안내)
+
+```bash
+echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 ```
 
 ## Step 1: 사용자 요구사항 수집
@@ -65,7 +87,10 @@ $SKILL_DIR/boltzgen_spec_reference.md
 ## Step 2: 구조 파일 업로드
 
 ```python
-upload_structure(file_path="<절대경로>")
+upload_structure(
+    file_path="<절대경로>",
+    api_key="<BOLTZGEN_API_KEY>"
+)
 # → asset_id 반환
 ```
 
@@ -76,21 +101,23 @@ upload_structure(file_path="<절대경로>")
 ```python
 render_template(
     asset_id="<asset_id>",
-    include=["A", "B"],            # 포함할 chain ID 목록
-    design="A:97..114",            # 재설계 구간 (선택)
-    binding_types=["B:317,321,324"] # 결합 잔기 (선택)
+    include=["A", "B"],
+    design=[{"chain_id": "A", "res_index": "97..114"}],   # 재설계 구간 (선택)
+    binding_types=[{"chain_id": "B", "binding": "317,321,324"}],  # 결합 잔기 (선택)
+    api_key="<BOLTZGEN_API_KEY>"
 )
 # → spec_id 반환
 ```
 
-### 복잡한 케이스 (raw YAML 직접 작성)
+### 복잡한 케이스 (raw YAML)
 
-`boltzgen_spec_reference.md`를 Read로 읽고 적절한 패턴을 적용해 YAML 작성 후:
+`boltzgen_spec_reference.md`를 Read로 읽고 패턴 적용 후:
 
 ```python
 validate_spec(
     raw_yaml="<yaml 문자열>",
-    asset_ids={"targets/<filename>": "<asset_id>"}
+    asset_ids=["<asset_id>"],
+    api_key="<BOLTZGEN_API_KEY>"
 )
 # → spec_id 반환
 ```
@@ -100,49 +127,49 @@ validate_spec(
 ```python
 submit_job(
     spec_id="<spec_id>",
-    num_designs=5,    # 기본값
-    budget=1          # 기본값
+    num_designs=5,
+    budget=1,
+    api_key="<BOLTZGEN_API_KEY>"
 )
 # → job_id 반환
 ```
 
 ## Step 5: 상태 확인
 
-잡이 **running** 상태에 도달하면 세부 정보를 출력하고 종료:
+잡이 **running** 상태에 도달하면 세부 정보 출력 후 종료:
 
 ```python
-get_job(job_id="<job_id>")
+get_job(
+    job_id="<job_id>",
+    api_key="<BOLTZGEN_API_KEY>"
+)
 ```
 
-출력 정보:
-- job_id, status, protocol, stage
-- created_at, started_at
-- 이후 확인 방법 안내
-
-완료까지 대기가 필요한 경우 `get_job`을 폴링하며 `succeeded` 상태 확인 후:
+완료 대기 시 `get_job` 폴링 → `succeeded` 후:
 ```python
-get_artifacts(job_id="<job_id>")
-# → 아티팩트 URL 목록
+get_artifacts(
+    job_id="<job_id>",
+    api_key="<BOLTZGEN_API_KEY>"
+)
 ```
 
 ## 잡 관리
 
 ```python
-get_job(job_id)               # 상태 확인
-get_logs(job_id, tail=100)    # 실시간 로그 (실제 진행률)
-list_jobs(status="running")   # 잡 목록
-cancel_job(job_id)            # 잡 취소
-list_templates()              # 사용 가능한 템플릿 목록
-list_workers()                # 워커 상태 (admin)
+get_job(job_id, api_key="<key>")               # 상태 확인
+get_logs(job_id, tail=100, api_key="<key>")    # 실시간 로그
+list_jobs(status="running", api_key="<key>")   # 잡 목록
+cancel_job(job_id, api_key="<key>")            # 잡 취소
+list_templates(api_key="<key>")               # 템플릿 목록
+list_workers(api_key="<key>")                 # 워커 상태 (admin)
 ```
-
-> `progress_percent`는 ACA log stream 기반으로 지연 가능. 정확한 진행률은 `get_logs`로 확인.
 
 ## 오류 처리
 
-- **YAML 검증 실패 (chain/residue)**: chain ID 대소문자, 1-based 잔기 인덱스 확인
+- **API_KEY 미설정**: `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
+- **MCP 미등록**: boltzgen-mcp 설치 후 `python3 setup.py` 재실행
+- **YAML 검증 실패**: chain ID 대소문자, 1-based 잔기 인덱스 확인
   → Mol* 뷰어: https://molstar.org/viewer/
-- **MCP 미등록**: `claude mcp list`에 boltzgen 없으면 boltzgen-mcp 설치 필요
-- **API 인증 실패**: `~/workspace/boltzgen-mcp/.env`의 `API_KEY` 확인
+- **인증 실패 (401)**: API KEY 값 확인
 - **잡 실패**: `get_job`의 `failure_message` 참고
-- **429 Concurrent limit**: `submit_job`에 동일 `client_request_id` 전달 시 같은 job_id 반환 (idempotent)
+- **429 Concurrent limit**: 동일 `client_request_id`로 재시도 시 같은 job_id 반환
