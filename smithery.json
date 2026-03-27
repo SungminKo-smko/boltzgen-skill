@@ -1,24 +1,16 @@
 {
   "name": "boltzgen-design",
-  "version": "1.5.0",
-  "description": "나노바디 디자인 자동화: 자연어 요구사항 → BoltzGen spec YAML → MSA API 제출 (업로드 → 검증 → 제출 → 상태 추적 → 아티팩트)",
+  "version": "2.0.0",
+  "description": "나노바디 디자인 자동화: 자연어 요구사항 → BoltzGen MSA API 제출 (MCP 기반, 업로드 → 렌더링 → 제출 → 상태 추적)",
   "author": "SungminKo-smko",
   "repository": "https://github.com/SungminKo-smko/boltzgen-skill",
   "skills": ["SKILL.md"],
   "install": {
     "type": "git",
     "url": "https://github.com/SungminKo-smko/boltzgen-skill",
-    "target": "~/.claude/skills/boltzgen-design",
-    "post_install": "bash setup.sh"
+    "target": "~/.claude/skills/boltzgen-design"
   },
   "requirements": {
-    "python": ">=3.9",
-    "packages": ["httpx>=0.27.0", "pyyaml>=6.0.2"]
-  },
-  "config": {
-    "API_KEY": {
-      "description": "x-api-key 인증 키 (API_BASE_URL은 기본값 내장)",
-      "required": true
-    }
+    "mcp": "boltzgen (https://github.com/SungminKo-smko/boltzgen-mcp)"
   }
 }
