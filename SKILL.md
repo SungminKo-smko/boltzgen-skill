@@ -166,12 +166,11 @@ submit.py 없이 Claude가 네이티브 API 호출로 전체 워크플로를 처
 ```bash
 git clone https://github.com/SungminKo-smko/boltzgen-mcp ~/workspace/boltzgen-mcp
 pip install -r ~/workspace/boltzgen-mcp/requirements.txt
-# .env 파일 설정
-cp ~/workspace/boltzgen-mcp/.env.example ~/workspace/boltzgen-mcp/.env
-# 편집: API_KEY=<your-api-key>
 
-# Claude Code에 등록
-claude mcp add boltzgen python3 ~/workspace/boltzgen-mcp/server.py
+# API_KEY 설정 (입력 중 * 로 표시됨)
+python3 ~/workspace/boltzgen-mcp/setup.py
+# → API_KEY: ******************  (별표로 마스킹)
+# → .env 파일에 저장 후 claude mcp add 명령 안내
 ```
 
 **MCP Tool 호출 순서:**
