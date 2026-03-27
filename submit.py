@@ -121,10 +121,16 @@ def upload_file(client: httpx.Client, base_url: str, file_path: Path) -> str:
     asset_id = data["asset_id"]
     upload_url = data["upload_url"]
 
+    # '#' in blob path is treated as a URL fragment by HTTP clients,
+    # stripping the SAS query string → Azure returns 409 PublicAccessNotPermitted.
+    # Encode '#' → '%23' in the path portion only; leave query string intact.
+    path_part, _, query_part = upload_url.partition("?")
+    safe_upload_url = path_part.replace("#", "%23") + ("?" + query_part if query_part else "")
+
     with httpx.Client(timeout=httpx.Timeout(CONNECT_TIMEOUT, read=300.0)) as raw_client:
         with file_path.open("rb") as f:
             put_resp = raw_client.put(
-                upload_url,
+                safe_upload_url,
                 content=f.read(),
                 headers={"x-ms-blob-type": "BlockBlob", "content-type": content_type},
             )
