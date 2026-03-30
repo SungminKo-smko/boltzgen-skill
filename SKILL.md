@@ -86,7 +86,9 @@ echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 
 ## Step 2: 구조 파일 업로드
 
-> **절대 금지**: `upload_structure(...)` 또는 파일을 Read로 읽어 base64 인코딩하는 방식은 절대 사용하지 않는다. 컨텍스트 초과를 유발한다.
+> **절대 금지**: base64 인코딩, `upload_structure(...)`, Read로 파일 읽기 — 모두 사용 금지. 컨텍스트 초과를 유발한다.
+>
+> **remote MCP여도 curl은 로컬 Bash에서 실행된다.** MCP 서버가 로컬 파일에 접근할 필요 없다. `create_upload_url`로 SAS URL을 받아 로컬 curl이 직접 업로드한다.
 
 ```python
 create_upload_url(
