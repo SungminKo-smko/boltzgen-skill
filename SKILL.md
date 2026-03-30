@@ -157,7 +157,15 @@ validate_spec(
 # → spec_id 반환
 ```
 
-## Step 4: 잡 제출
+## Step 4: Spec 검증
+
+`render_template` 또는 `validate_spec`이 반환한 결과를 확인한다.
+
+- `spec_id` 값이 있으면 → Step 5 진행
+- `error` 키가 있으면 → 에러 내용을 사용자에게 보여주고 중단
+- `warnings` 가 있으면 → 사용자에게 경고 내용 표시 후 계속 진행
+
+## Step 5: 잡 제출
 
 ```python
 submit_job(
@@ -169,7 +177,7 @@ submit_job(
 # → job_id 반환
 ```
 
-## Step 5: 상태 확인
+## Step 6: 상태 확인
 
 잡이 **running** 상태에 도달하면 세부 정보 출력 후 종료:
 
