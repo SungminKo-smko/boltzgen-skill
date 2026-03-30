@@ -41,7 +41,9 @@ python3 ~/workspace/boltzgen-mcp/setup.py
 ```
 [Step 0] ~/.claude/skills/boltzgen-design/.env 에서 API KEY 로드
   ↓
-upload_structure(file_path, api_key=<KEY>) → asset_id
+[Step 2 — remote] create_upload_url(filename, api_key=<KEY>) → asset_id + upload_url
+  → Bash: curl -X PUT -T <file_path> -H "x-ms-blob-type: BlockBlob" -H "Content-Type: ..." <upload_url>
+[Step 2 — local]  upload_structure(file_path, api_key=<KEY>) → asset_id
   ↓
 render_template(asset_id, include, design, binding_types, api_key=<KEY>) → spec_id
   또는 validate_spec(raw_yaml, asset_ids, api_key=<KEY>) → spec_id
@@ -50,6 +52,13 @@ submit_job(spec_id, num_designs, budget, api_key=<KEY>) → job_id
   ↓
 get_job(job_id, api_key=<KEY>) — running 도달 시 세부 정보 출력 후 종료
 ```
+
+## 파일 업로드 방식 선택
+
+- **remote MCP 서버** (`boltzgen-remote`): `create_upload_url` + `curl PUT` 사용.
+  파일 내용이 Claude 컨텍스트를 거치지 않아 대용량 CIF/PDB 파일도 처리 가능.
+  `upload_structure(file_content_base64=...)` 방식은 컨텍스트 초과를 유발하므로 **사용 금지**.
+- **local stdio 서버** (`boltzgen`): `upload_structure(file_path=...)` 사용.
 
 ## 기본 동작
 

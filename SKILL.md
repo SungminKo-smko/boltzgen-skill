@@ -86,6 +86,28 @@ echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 
 ## Step 2: 구조 파일 업로드
 
+### 방식 A — remote MCP 서버 (권장, 파일 내용이 컨텍스트에 올라오지 않음)
+
+```python
+create_upload_url(
+    filename="<파일명>",        # 예: "target.cif"
+    api_key="<BOLTZGEN_API_KEY>"
+)
+# → asset_id, upload_url, content_type, curl_hint 반환
+```
+
+반환된 `curl_hint`의 `<FILE_PATH>`를 실제 절대경로로 교체 후 Bash로 실행:
+
+```bash
+curl -s -X PUT -T "<절대경로>" \
+  -H "x-ms-blob-type: BlockBlob" \
+  -H "Content-Type: <content_type>" \
+  "<upload_url>"
+# 성공 시 빈 응답(200/201). 오류 시 XML 에러 메시지 출력.
+```
+
+### 방식 B — local/stdio MCP 서버
+
 ```python
 upload_structure(
     file_path="<절대경로>",
