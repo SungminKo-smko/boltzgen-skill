@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 2.1.0
+version: 2.2.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen API에
   직접 제출하여 업로드 → 렌더링/검증 → 제출 → 상태 추적까지 전체 워크플로를 자동화한다.
@@ -86,7 +86,9 @@ echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 
 ## Step 2: 구조 파일 업로드
 
-### 방식 A — remote MCP 서버 (권장, 파일 내용이 컨텍스트에 올라오지 않음)
+> **절대 금지**: `upload_structure(file_content_base64=...)` 또는 파일을 Read로 읽어 base64 인코딩하는 방식은 절대 사용하지 않는다. 컨텍스트 초과를 유발한다.
+
+### 방식 A — remote MCP 서버 (항상 우선 사용)
 
 ```python
 create_upload_url(
@@ -106,11 +108,11 @@ curl -s -X PUT -T "<절대경로>" \
 # 성공 시 빈 응답(200/201). 오류 시 XML 에러 메시지 출력.
 ```
 
-### 방식 B — local/stdio MCP 서버
+### 방식 B — local/stdio MCP 서버 (`create_upload_url` 툴이 없는 경우만)
 
 ```python
 upload_structure(
-    file_path="<절대경로>",
+    file_path="<절대경로>",     # 파일 경로만 전달. base64 인코딩 금지.
     api_key="<BOLTZGEN_API_KEY>"
 )
 # → asset_id 반환
