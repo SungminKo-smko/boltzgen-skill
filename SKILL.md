@@ -68,14 +68,35 @@ echo "API_KEY: ${BOLTZGEN_API_KEY:0:4}****"
 echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 ```
 
-## Step 1: 사용자 요구사항 수집
+## Step 1: 환경 감지 및 사용자 요구사항 수집
+
+### Claude Desktop 감지
+
+```bash
+if [ -d "/mnt/user-data/uploads" ]; then
+    echo "CLAUDE_DESKTOP=true"
+    ls /mnt/user-data/uploads/
+else
+    echo "CLAUDE_DESKTOP=false"
+fi
+```
+
+**CLAUDE_DESKTOP=true** 이면:
+- 사용자가 채팅에 첨부한 파일은 `/mnt/user-data/uploads/<파일명>`에 저장된다.
+- 파일명의 `#` 등 특수문자는 `_`로 변환될 수 있으므로 `ls` 결과로 실제 파일명을 확인한다.
+- 사용자에게 파일 경로를 묻지 말고 위 경로를 직접 사용한다.
+
+**CLAUDE_DESKTOP=false** 이면:
+- 사용자에게 구조 파일 절대경로를 묻는다.
+
+### 요구사항 수집
 
 **딱 3가지만 물어본다. 나머지는 default 사용.**
 
 사용자가 이미 정보를 제공했으면 AskUserQuestion 생략하고 바로 진행.
 
 필수:
-1. **구조 파일 경로** — `.cif` 또는 `.pdb` 파일 경로 (절대경로)
+1. **구조 파일 경로** — `.cif` 또는 `.pdb` 파일 경로 (Claude Desktop이면 위에서 자동 확인)
 2. **target chain ID** — 결합 대상 chain (예: `A`, `A B`)
 3. **design 범위** — 새 나노바디 길이(예: `80..140`) 또는 재설계 구간(예: `A:97..114`)
 
