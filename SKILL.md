@@ -108,47 +108,88 @@ curl -s -X PUT -T "<절대경로>" \
 
 ## Step 3: Spec 생성
 
-### 일반 나노바디 (템플릿 렌더링 — 권장)
+두 가지 방법이 있다. **render_template (권장)** 또는 **validate_spec (raw YAML)**.
+두 방법 모두 `spec_id`를 반환하며, 이 `spec_id`를 Step 4에서 `submit_job`에 전달한다.
+
+### 방법 A: render_template (권장, 대부분의 경우)
 
 ```python
-render_template(
+result = render_template(
     asset_id="<asset_id>",
-    include=["A", "B"],
-    design=[{"chain_id": "A", "res_index": "97..114"}],   # 재설계 구간 (선택)
+    include=["A", "B"],                                      # 포함할 체인 ID
+    design=[{"chain_id": "A", "res_index": "97..114"}],      # 재설계 구간 (선택)
     binding_types=[{"chain_id": "B", "binding": "317,321,324"}]  # 결합 잔기 (선택)
 )
-# → spec_id 반환
+# 반환값: {"spec_id": "xxx", "canonical_yaml": "..."} 또는 {"error": "..."}
 ```
 
-### 복잡한 케이스 (raw YAML)
+**design, binding_types 딕셔너리 키:**
+- `chain_id` 또는 `id` — 체인 식별자 (예: `"A"`)
+- `res_index` — 잔기 범위 (예: `"97..114"`, `"14..19"`)
+- `binding` — 결합 잔기 번호 (예: `"317,321,324"`)
 
-`boltzgen_spec_reference.md`를 Read로 읽고 패턴 적용 후:
+### 방법 B: validate_spec (복잡한 케이스 — design_insertions, 소분자 등)
+
+`render_template`으로 표현할 수 없는 경우 raw YAML을 직접 작성한다.
+`boltzgen_spec_reference.md`를 Read로 읽고 패턴을 참고한다.
+
+**주의: raw YAML의 키 이름은 render_template과 다르다.**
+- `include` 내부: `chain: { id: A }` (중첩 구조)
+- `binding_types` 내부: `chain: { id: A, binding: "..." }` (중첩 구조)
+- `design` 내부: `chain: { id: A, res_index: "..." }` (중첩 구조)
 
 ```python
-validate_spec(
-    raw_yaml="<yaml 문자열>",
+# 예: CDR3 재설계 (design_insertions)
+yaml_spec = """
+entities:
+  - file:
+      path: targets/<파일명>
+      include:
+        - chain:
+            id: A
+            res_index: 1..96,115..
+        - chain:
+            id: B
+      binding_types:
+        - chain:
+            id: B
+            binding: "317,321,324,325,326"
+      design_insertions:
+        - insertion:
+            id: A
+            res_index: 96
+            num_residues: 12..18
+"""
+
+result = validate_spec(
+    raw_yaml=yaml_spec,
     asset_ids=["<asset_id>"]
 )
-# → spec_id 반환
+# 반환값: {"spec_id": "xxx"} 또는 {"error": "...", "validation_errors": [...]}
 ```
 
-## Step 4: Spec 검증
+### render_template vs validate_spec 선택 기준
 
-`render_template` 또는 `validate_spec`이 반환한 결과를 확인한다.
+| 상황 | 방법 |
+|------|------|
+| 새 나노바디 디자인 (기본) | `render_template` |
+| 특정 잔기 재설계 (design) | `render_template` (design 파라미터) |
+| CDR 길이 변경 (design_insertions) | `validate_spec` (raw YAML) |
+| 소분자 결합 설계 (ligand) | `validate_spec` (raw YAML) |
+| 고리형 펩타이드 | `validate_spec` (raw YAML) |
 
-- `spec_id` 값이 있으면 → Step 5 진행
-- `error` 키가 있으면 → 에러 내용을 사용자에게 보여주고 중단
-- `warnings` 가 있으면 → 사용자에게 경고 내용 표시 후 계속 진행
+## Step 4: 잡 제출
 
-## Step 5: 잡 제출
+Step 3에서 반환된 `spec_id`로 잡을 제출한다.
+반환값에 `error`가 있으면 에러 내용을 사용자에게 보여주고 중단한다.
 
 ```python
-submit_job(
-    spec_id="<spec_id>",
+result = submit_job(
+    spec_id="<spec_id>",    # render_template 또는 validate_spec에서 반환된 값
     num_designs=5,
     budget=1
 )
-# → job_id 반환
+# 반환값: {"job_id": "xxx", "status": "queued"} 또는 {"error": "..."}
 ```
 
 ## Step 6: 상태 확인

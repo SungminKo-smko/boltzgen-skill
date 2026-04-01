@@ -35,16 +35,27 @@ claude mcp add boltzgen-mcp \
 ```
 [Step 0] MCP OAuth 자동 인증 (별도 설정 불필요)
   ↓
-[Step 2] create_upload_url(filename) → asset_id + upload_url
+[Step 1] create_upload_url(filename) → asset_id + upload_url
   → Bash: curl -X PUT -T <file_path> -H "x-ms-blob-type: BlockBlob" -H "Content-Type: ..." <upload_url>
   ↓
-render_template(asset_id, include, design, binding_types) → spec_id
-  또는 validate_spec(raw_yaml, asset_ids) → spec_id
+[Step 2] Spec 생성:
+  render_template(asset_id, include, design, binding_types) → {"spec_id": "xxx"}
+  또는 validate_spec(raw_yaml, asset_ids) → {"spec_id": "xxx"}
   ↓
-submit_job(spec_id, num_designs, budget) → job_id
+[Step 3] submit_job(spec_id, num_designs, budget) → {"job_id": "xxx"}
   ↓
-get_job(job_id) — running 도달 시 세부 정보 출력 후 종료
+[Step 4] get_job(job_id) — running 도달 시 세부 정보 출력 후 종료
 ```
+
+### Spec 생성 시 키 이름 주의
+
+| 컨텍스트 | 키 예시 |
+|---------|--------|
+| `render_template` 파라미터 | `{"chain_id": "A", "res_index": "97..114"}` (flat dict) |
+| `validate_spec` raw YAML | `chain: { id: A, res_index: "97..114" }` (중첩 구조) |
+
+두 방식의 키 이름이 다르다. `render_template`은 flat dict, `validate_spec`은 YAML 중첩 구조.
+CDR 길이 변경(`design_insertions`), 소분자 결합 등 복잡한 경우는 `validate_spec` + raw YAML을 사용한다.
 
 ## 파일 업로드
 
