@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 3.1.0
+version: 3.1.1
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen API에
   직접 제출하여 업로드 → 렌더링/검증 → 제출 → 상태 추적까지 전체 워크플로를 자동화한다.
