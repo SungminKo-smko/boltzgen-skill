@@ -36,11 +36,16 @@ claude mcp add boltzgen-mcp \
 
 > 최초 접속 시 MCP OAuth 2.1 흐름이 자동 실행되어 브라우저 인증 후 API KEY가 발급된다.
 
-## Step 0: API KEY 자동 발급 + 로드
+## Step 0: OAuth 자동 인증 (별도 설정 불필요)
 
-**API KEY는 모든 tool 호출 시 `api_key` 인수로 전달한다.**
+MCP가 streamable-http로 등록되어 있으면 **최초 연결 시 브라우저 OAuth 2.1이 자동 실행**된다.
+인증 완료 후 모든 tool 호출에서 `api_key` 파라미터를 **생략**할 수 있다.
 
-### .env에서 기존 키 로드
+> **참고**: @shaperon.com 계정은 자동 승인된다. 그 외 계정은 관리자 승인이 필요하다.
+
+### Fallback: .env 파일로 API KEY 관리 (선택사항)
+
+OAuth 자동 인증을 사용할 수 없는 환경에서는 `.env` 파일에 API KEY를 저장하여 사용할 수 있다.
 
 ```bash
 SKILL_ENV="$HOME/.claude/skills/boltzgen-design/.env"
@@ -50,39 +55,27 @@ if [ -f "$SKILL_ENV" ]; then
     BOLTZGEN_API_KEY=$(grep -E "^API_KEY=" "$SKILL_ENV" | cut -d= -f2-)
 fi
 
-# 환경변수 fallback
-[ -z "$BOLTZGEN_API_KEY" ] && BOLTZGEN_API_KEY="${BOLTZGEN_API_KEY:-${API_KEY:-}}"
-
 echo "BOLTZGEN_API_KEY=${BOLTZGEN_API_KEY}"
 ```
 
-### 키가 없으면: provision_api_key로 자동 발급
-
-**값이 비어있으면** → MCP 도구 `provision_api_key()`를 호출하여 자동 발급한다.
-(MCP OAuth 2.1이 자동으로 브라우저 인증을 진행한다.)
+`.env`에 키를 저장하고 싶다면 `provision_api_key()` 도구를 호출하여 발급받을 수 있다:
 
 ```python
 provision_api_key()
 # → {"api_key": "b2_xxxxx", "profile_email": "user@example.com", "created": true, "service": "boltzgen"}
 ```
 
-반환된 `api_key`를 `.env` 파일에 저장:
-
 ```bash
 mkdir -p "$HOME/.claude/skills/boltzgen-design"
 echo "API_KEY=<반환된 api_key 값>" > "$HOME/.claude/skills/boltzgen-design/.env"
 ```
 
-저장된 키를 `BOLTZGEN_API_KEY` 변수에 설정하고 이후 모든 tool 호출에 `api_key=<BOLTZGEN_API_KEY>`로 전달한다.
-
-> **참고**: @shaperon.com 계정은 자동 승인된다. 그 외 계정은 관리자 승인이 필요하다.
+> `api_key` 파라미터는 하위 호환을 위해 모든 tool에 남아 있지만, OAuth 연결 시 생략 가능하다.
 
 ### 크로스 서비스 인증
 
 API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
 단, 키 자체는 서비스별로 분리되어 있다 (boltzgen 키는 boltzgen에서만 동작).
-
-이 단계에서 확정된 `BOLTZGEN_API_KEY` 값을 이후 **모든 tool 호출의 `api_key` 인수**로 전달한다.
 
 ## Step 1: 환경 감지 및 사용자 요구사항 수집
 
@@ -128,10 +121,7 @@ fi
 > **remote MCP여도 curl은 로컬 Bash에서 실행된다.** MCP 서버가 로컬 파일에 접근할 필요 없다. `create_upload_url`로 SAS URL을 받아 로컬 curl이 직접 업로드한다.
 
 ```python
-create_upload_url(
-    filename="<파일명>",        # 예: "target.cif"
-    api_key="<BOLTZGEN_API_KEY>"
-)
+create_upload_url(filename="<파일명>")   # 예: "target.cif"
 # → asset_id, upload_url, content_type, curl_hint 반환
 ```
 
@@ -154,8 +144,7 @@ render_template(
     asset_id="<asset_id>",
     include=["A", "B"],
     design=[{"chain_id": "A", "res_index": "97..114"}],   # 재설계 구간 (선택)
-    binding_types=[{"chain_id": "B", "binding": "317,321,324"}],  # 결합 잔기 (선택)
-    api_key="<BOLTZGEN_API_KEY>"
+    binding_types=[{"chain_id": "B", "binding": "317,321,324"}]  # 결합 잔기 (선택)
 )
 # → spec_id 반환
 ```
@@ -167,8 +156,7 @@ render_template(
 ```python
 validate_spec(
     raw_yaml="<yaml 문자열>",
-    asset_ids=["<asset_id>"],
-    api_key="<BOLTZGEN_API_KEY>"
+    asset_ids=["<asset_id>"]
 )
 # → spec_id 반환
 ```
@@ -187,8 +175,7 @@ validate_spec(
 submit_job(
     spec_id="<spec_id>",
     num_designs=5,
-    budget=1,
-    api_key="<BOLTZGEN_API_KEY>"
+    budget=1
 )
 # → job_id 반환
 ```
@@ -198,29 +185,23 @@ submit_job(
 잡이 **running** 상태에 도달하면 세부 정보 출력 후 종료:
 
 ```python
-get_job(
-    job_id="<job_id>",
-    api_key="<BOLTZGEN_API_KEY>"
-)
+get_job(job_id="<job_id>")
 ```
 
 완료 대기 시 `get_job` 폴링 → `succeeded` 후:
 ```python
-get_artifacts(
-    job_id="<job_id>",
-    api_key="<BOLTZGEN_API_KEY>"
-)
+get_artifacts(job_id="<job_id>")
 ```
 
 ## 잡 관리
 
 ```python
-get_job(job_id, api_key="<key>")               # 상태 확인
-get_logs(job_id, tail=100, api_key="<key>")    # 실시간 로그
-list_jobs(status="running", api_key="<key>")   # 잡 목록
-cancel_job(job_id, api_key="<key>")            # 잡 취소
-list_templates(api_key="<key>")               # 템플릿 목록
-list_workers(api_key="<key>")                 # 워커 상태 (admin)
+get_job(job_id)                        # 상태 확인
+get_logs(job_id, tail=100)             # 실시간 로그
+list_jobs(status="running")            # 잡 목록
+cancel_job(job_id)                     # 잡 취소
+list_templates()                       # 템플릿 목록
+list_workers()                         # 워커 상태 (admin)
 ```
 
 ## 로그 스트리밍 Artifact
@@ -265,8 +246,8 @@ setInterval(fetchLogs, 5000);
 
 ## 오류 처리
 
-- **API_KEY 미설정**: `/auth/login` OAuth 로그인으로 발급받거나, `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
-- **인증 실패 (401)**: API KEY 만료 시 `/auth/login`으로 재발급. boltz2와 동일 키 사용 가능
+- **인증 실패**: MCP streamable-http 연결을 재시도하면 OAuth 2.1이 다시 실행된다. 또는 `.env`에 `API_KEY=<key>` 추가
+- **401 오류**: OAuth 토큰 만료 시 MCP 재연결로 갱신. fallback으로 `/auth/login` 재발급 가능
 - **MCP 미등록**: `claude mcp add boltzgen-mcp --transport streamable-http https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
 - **YAML 검증 실패**: chain ID 대소문자, 1-based 잔기 인덱스 확인
   → Mol* 뷰어: https://molstar.org/viewer/
