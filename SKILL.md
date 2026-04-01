@@ -27,11 +27,14 @@ git clone https://github.com/SungminKo-smko/boltzgen-skill ~/.claude/skills/bolt
 claude mcp list 2>/dev/null | grep boltzgen || echo "NOT_REGISTERED"
 ```
 
-**NOT_REGISTERED** 출력 시:
+**NOT_REGISTERED** 출력 시 — boltzgen API 내장 MCP를 Streamable HTTP로 등록:
 ```bash
-git clone https://github.com/SungminKo-smko/boltzgen-mcp ~/workspace/boltzgen-mcp
-python3 ~/workspace/boltzgen-mcp/setup.py
+claude mcp add boltzgen-mcp \
+  --transport streamable-http \
+  https://nanobody-designer-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp
 ```
+
+> 최초 접속 시 MCP OAuth 2.1 흐름이 자동 실행되어 브라우저 인증 후 API KEY가 발급된다.
 
 ## Step 0: API KEY 로드
 
@@ -276,7 +279,7 @@ setInterval(fetchLogs, 5000);
 
 - **API_KEY 미설정**: `/auth/login` OAuth 로그인으로 발급받거나, `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
 - **인증 실패 (401)**: API KEY 만료 시 `/auth/login`으로 재발급. boltz2와 동일 키 사용 가능
-- **MCP 미등록**: boltzgen-mcp 설치 후 `python3 setup.py` 재실행
+- **MCP 미등록**: `claude mcp add boltzgen-mcp --transport streamable-http https://nanobody-designer-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
 - **YAML 검증 실패**: chain ID 대소문자, 1-based 잔기 인덱스 확인
   → Mol* 뷰어: https://molstar.org/viewer/
 - **잡 실패**: `get_job`의 `failure_message` 참고
