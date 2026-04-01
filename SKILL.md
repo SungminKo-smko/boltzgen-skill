@@ -36,41 +36,12 @@ claude mcp add boltzgen-mcp \
 
 > 최초 접속 시 MCP OAuth 2.1 흐름이 자동 실행되어 브라우저 인증 후 API KEY가 발급된다.
 
-## Step 0: OAuth 자동 인증 (별도 설정 불필요)
+## Step 0: 인증 (자동)
 
-MCP가 streamable-http로 등록되어 있으면 **최초 연결 시 브라우저 OAuth 2.1이 자동 실행**된다.
-인증 완료 후 모든 tool 호출에서 `api_key` 파라미터를 **생략**할 수 있다.
+MCP가 streamable-http로 등록되어 있으면 **최초 연결 시 OAuth 2.1 브라우저 인증이 자동 실행**된다.
+이후 모든 tool 호출은 별도 인증 파라미터 없이 동작한다.
 
-> **참고**: @shaperon.com 계정은 자동 승인된다. 그 외 계정은 관리자 승인이 필요하다.
-
-### Fallback: .env 파일로 API KEY 관리 (선택사항)
-
-OAuth 자동 인증을 사용할 수 없는 환경에서는 `.env` 파일에 API KEY를 저장하여 사용할 수 있다.
-
-```bash
-SKILL_ENV="$HOME/.claude/skills/boltzgen-design/.env"
-BOLTZGEN_API_KEY=""
-
-if [ -f "$SKILL_ENV" ]; then
-    BOLTZGEN_API_KEY=$(grep -E "^API_KEY=" "$SKILL_ENV" | cut -d= -f2-)
-fi
-
-echo "BOLTZGEN_API_KEY=${BOLTZGEN_API_KEY}"
-```
-
-`.env`에 키를 저장하고 싶다면 `provision_api_key()` 도구를 호출하여 발급받을 수 있다:
-
-```python
-provision_api_key()
-# → {"api_key": "b2_xxxxx", "profile_email": "user@example.com", "created": true, "service": "boltzgen"}
-```
-
-```bash
-mkdir -p "$HOME/.claude/skills/boltzgen-design"
-echo "API_KEY=<반환된 api_key 값>" > "$HOME/.claude/skills/boltzgen-design/.env"
-```
-
-> `api_key` 파라미터는 하위 호환을 위해 모든 tool에 남아 있지만, OAuth 연결 시 생략 가능하다.
+> **참고**: @shaperon.com 계정은 자동 승인. 그 외 계정은 관리자 승인 필요.
 
 ### 크로스 서비스 인증
 
@@ -217,7 +188,6 @@ artifact는 MCP Streamable HTTP를 직접 호출하는 방식으로 구현한다
 
 artifact에 하드코딩할 값:
 - **MCP_URL**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
-- **API_KEY**: `<BOLTZGEN_API_KEY>` (Step 0에서 읽은 값)
 - **JOB_ID**: 제출된 job_id
 
 ```javascript
@@ -237,7 +207,7 @@ async function fetchLogs() {
     headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                 "mcp-session-id": sessionId },
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call",
-      params: { name: "get_logs", arguments: { job_id: JOB_ID, tail: 100, api_key: API_KEY } } })
+      params: { name: "get_logs", arguments: { job_id: JOB_ID, tail: 100 } } })
   });
   // SSE 파싱: "data: {...}" 라인에서 result.content[0].text 추출
 }
@@ -246,8 +216,8 @@ setInterval(fetchLogs, 5000);
 
 ## 오류 처리
 
-- **인증 실패**: MCP streamable-http 연결을 재시도하면 OAuth 2.1이 다시 실행된다. 또는 `.env`에 `API_KEY=<key>` 추가
-- **401 오류**: OAuth 토큰 만료 시 MCP 재연결로 갱신. fallback으로 `/auth/login` 재발급 가능
+- **인증 실패**: MCP streamable-http 연결을 재시도하면 OAuth 2.1이 다시 실행된다
+- **401 오류**: OAuth 토큰 만료 시 MCP 재연결로 자동 갱신
 - **MCP 미등록**: `claude mcp add boltzgen-mcp --transport streamable-http https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
 - **YAML 검증 실패**: chain ID 대소문자, 1-based 잔기 인덱스 확인
   → Mol* 뷰어: https://molstar.org/viewer/

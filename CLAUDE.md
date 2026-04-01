@@ -2,23 +2,12 @@
 
 Claude Code 스킬: boltzgen MCP 서버를 통해 나노바디 디자인 잡을 제출한다.
 
-## 인증
+## 인증 (자동)
 
 MCP가 streamable-http로 등록되어 있으면 **최초 연결 시 OAuth 2.1 브라우저 인증이 자동 실행**된다.
-인증 완료 후 모든 tool 호출에서 `api_key` 파라미터를 **생략**할 수 있다.
+이후 모든 tool 호출은 별도 인증 파라미터 없이 동작한다.
 
-> **참고**: @shaperon.com 계정은 자동 승인. 키는 서비스별 분리 (boltzgen 키는 boltzgen 전용).
-
-### Fallback: .env 파일 (선택사항)
-
-OAuth를 사용할 수 없는 환경에서는 `.env`에 API KEY를 저장하여 사용할 수 있다.
-`provision_api_key()` 도구로 키를 발급받아 저장하거나, 수동 설정도 가능하다.
-
-```bash
-echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
-```
-
-> `api_key` 파라미터는 하위 호환을 위해 모든 tool에 남아 있지만, OAuth 연결 시 생략 가능하다.
+> **참고**: @shaperon.com 계정은 자동 승인.
 
 ## 필수 입력 (딱 3가지만 물어볼 것)
 
@@ -40,7 +29,6 @@ claude mcp add boltzgen-mcp \
 ```
 
 최초 접속 시 MCP OAuth 2.1이 자동으로 브라우저 인증을 진행한다.
-(API KEY는 스킬 설정 파일 `~/.claude/skills/boltzgen-design/.env`에도 보관 가능)
 
 ## 워크플로
 
@@ -87,8 +75,8 @@ list_workers()                         # 워커 상태 (admin)
 
 ## 오류 처리
 
-- **인증 실패**: MCP streamable-http 연결을 재시도하면 OAuth 2.1이 다시 실행된다. 또는 `.env`에 `API_KEY=<key>` 추가
-- **401 오류**: OAuth 토큰 만료 시 MCP 재연결로 갱신. fallback으로 `/auth/login` 재발급 가능
+- **인증 실패**: MCP streamable-http 연결을 재시도하면 OAuth 2.1이 다시 실행된다
+- **401 오류**: OAuth 토큰 만료 시 MCP 재연결로 자동 갱신
 - **MCP 미등록**: `claude mcp add boltzgen-mcp --transport streamable-http https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
 - **YAML 검증 실패**: chain ID 대소문자, 잔기 인덱스는 1-based (label_asym_id 기준)
   → Mol* 뷰어: https://molstar.org/viewer/
