@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 2.4.0
+version: 2.5.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen API에
   직접 제출하여 업로드 → 렌더링/검증 → 제출 → 상태 추적까지 전체 워크플로를 자동화한다.
@@ -35,11 +35,37 @@ python3 ~/workspace/boltzgen-mcp/setup.py
 
 ## Step 0: API KEY 로드
 
-사용자의 API KEY를 스킬 설정 파일에서 읽는다.
 **API KEY는 사용자가 직접 관리하며, 모든 tool 호출 시 인수로 전달한다.**
 
+### API KEY 취득 방법
+
+| 방법 | 설명 |
+|------|------|
+| **방법 1 (권장): OAuth 로그인** | 브라우저에서 `/auth/login` 엔드포인트 접속 → Google OAuth → API KEY 발급 |
+| **방법 2: MCP OAuth 2.1** | HTTP transport MCP 서버 최초 접속 시 자동 실행 |
+| **방법 3 (fallback): .env 수동 설정** | `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 저장 |
+
+> **참고**: @shaperon.com 계정은 자동 승인된다.
+
+### 인증 API 엔드포인트
+
+API Base URL: `https://nanobody-designer-api.politebay-55ff119b.westus3.azurecontainerapps.io`
+
+| 엔드포인트 | 메서드 | 설명 | 응답 |
+|------------|--------|------|------|
+| `/auth/login` | GET | Google OAuth 로그인 페이지로 리다이렉트 | `{auth_url}` |
+| `/auth/callback` | GET | OAuth 콜백 (로그인 완료) | `{user_id, email, api_key, message}` |
+| `/auth/device-code` | POST | 디바이스 코드 발급 (CLI용) | `{device_code, user_code, verification_url}` |
+| `/auth/device-token` | POST | 디바이스 코드로 토큰 교환 | `{status, api_key}` |
+
+### 크로스 서비스 인증
+
+API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
+boltzgen에서 발급받은 키는 boltz2 서비스에서도 동일하게 사용 가능하다.
+
+### .env 파일에서 로드
+
 ```bash
-# 스킬 설정에서 API_KEY 읽기
 SKILL_ENV="$HOME/.claude/skills/boltzgen-design/.env"
 BOLTZGEN_API_KEY=""
 
@@ -50,23 +76,22 @@ fi
 # 환경변수 fallback
 [ -z "$BOLTZGEN_API_KEY" ] && BOLTZGEN_API_KEY="${BOLTZGEN_API_KEY:-${API_KEY:-}}"
 
-if [ -z "$BOLTZGEN_API_KEY" ]; then
-    echo "ERROR: API_KEY가 설정되지 않았습니다."
-    echo "아래 명령으로 설정해 주세요:"
-    echo "  echo 'API_KEY=<your-key>' > ~/.claude/skills/boltzgen-design/.env"
-    exit 1
-fi
-
-echo "API_KEY: ${BOLTZGEN_API_KEY:0:4}****"
+echo "BOLTZGEN_API_KEY=${BOLTZGEN_API_KEY}"
 ```
 
-이 단계에서 읽은 `BOLTZGEN_API_KEY` 값을 이후 **모든 tool 호출의 `api_key` 인수**로 전달한다.
+- **값이 있으면** → 그 값을 `BOLTZGEN_API_KEY`로 사용
+- **값이 없으면** → `AskUserQuestion`으로 사용자에게 안내:
+  > "BoltzGen API KEY가 없습니다. 아래 URL에서 OAuth 로그인 후 발급받으세요:
+  > https://nanobody-designer-api.politebay-55ff119b.westus3.azurecontainerapps.io/auth/login
+  > 발급받은 API KEY를 입력해 주세요."
 
-### API KEY 최초 설정 (미설정 시 안내)
+  입력받은 키를 Bash로 저장 후 사용:
+  ```bash
+  mkdir -p "$HOME/.claude/skills/boltzgen-design"
+  echo "API_KEY=<입력받은값>" > "$HOME/.claude/skills/boltzgen-design/.env"
+  ```
 
-```bash
-echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
-```
+이 단계에서 확정된 `BOLTZGEN_API_KEY` 값을 이후 **모든 tool 호출의 `api_key` 인수**로 전달한다.
 
 ## Step 1: 환경 감지 및 사용자 요구사항 수집
 
@@ -249,10 +274,10 @@ setInterval(fetchLogs, 5000);
 
 ## 오류 처리
 
-- **API_KEY 미설정**: `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
+- **API_KEY 미설정**: `/auth/login` OAuth 로그인으로 발급받거나, `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
+- **인증 실패 (401)**: API KEY 만료 시 `/auth/login`으로 재발급. boltz2와 동일 키 사용 가능
 - **MCP 미등록**: boltzgen-mcp 설치 후 `python3 setup.py` 재실행
 - **YAML 검증 실패**: chain ID 대소문자, 1-based 잔기 인덱스 확인
   → Mol* 뷰어: https://molstar.org/viewer/
-- **인증 실패 (401)**: API KEY 값 확인
 - **잡 실패**: `get_job`의 `failure_message` 참고
 - **429 Concurrent limit**: 동일 `client_request_id`로 재시도 시 같은 job_id 반환

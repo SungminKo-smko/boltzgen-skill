@@ -4,15 +4,39 @@ Claude Code 스킬: boltzgen MCP 서버를 통해 나노바디 디자인 잡을 
 
 ## API KEY 관리 (중요)
 
-boltzgen MCP 서버는 **공유 서버**다. API KEY는 사용자 각자가 스킬 설정 파일에 보관하며,
+boltzgen MCP 서버는 **공유 서버**다. API KEY는 사용자 각자가 취득하며,
 **모든 tool 호출 시 `api_key` 인수로 직접 전달**한다. MCP 서버 환경변수에 의존하지 않는다.
 
-API KEY 설정:
+### API KEY 취득 방법
+
+**방법 1 (권장): 브라우저 OAuth 로그인**
+
+아래 URL을 브라우저에서 열면 Google OAuth (Supabase) 로그인 후 API KEY가 발급된다:
+```
+https://nanobody-designer-api.politebay-55ff119b.westus3.azurecontainerapps.io/auth/login
+```
+콜백 페이지에서 `api_key` 값을 복사하여 `.env` 파일에 저장한다.
+
+**방법 2: MCP OAuth 2.1 (자동)**
+
+HTTP transport로 MCP 서버에 최초 접속 시 OAuth 2.1 흐름이 자동으로 실행된다.
+별도 설정 없이 API KEY가 자동 발급된다.
+
+**방법 3 (fallback): .env 파일 수동 설정**
 ```bash
 echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 ```
 
-스킬 실행 시 Step 0에서 이 파일을 읽어 `BOLTZGEN_API_KEY` 변수에 로드하고,
+> **참고**: @shaperon.com 계정은 자동 승인된다.
+
+### 크로스 서비스 인증
+
+API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
+boltzgen `/auth/login`으로 발급받은 키는 boltz2 서비스에서도 동일하게 사용 가능하다.
+
+### API KEY 로드
+
+스킬 실행 시 Step 0에서 `.env` 파일을 읽어 `BOLTZGEN_API_KEY` 변수에 로드하고,
 이후 모든 tool 호출에 `api_key=<BOLTZGEN_API_KEY>`를 인수로 전달한다.
 
 ## 필수 입력 (딱 3가지만 물어볼 것)
@@ -39,7 +63,10 @@ python3 ~/workspace/boltzgen-mcp/setup.py
 ## 워크플로
 
 ```
-[Step 0] ~/.claude/skills/boltzgen-design/.env 에서 API KEY 로드
+[Step 0] API KEY 확인
+  ├─ .env 파일에서 로드 (기존 키가 있는 경우)
+  ├─ 또는 /auth/login OAuth 로그인으로 발급
+  └─ 또는 MCP OAuth 2.1 자동 발급
   ↓
 [Step 2] create_upload_url(filename, api_key=<KEY>) → asset_id + upload_url
   → Bash: curl -X PUT -T <file_path> -H "x-ms-blob-type: BlockBlob" -H "Content-Type: ..." <upload_url>
@@ -81,11 +108,11 @@ list_workers(api_key=<KEY>)                 # 워커 상태 (admin)
 
 ## 오류 처리
 
-- **API KEY 미설정**: `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
+- **API KEY 미설정**: OAuth 로그인(`/auth/login`)으로 발급받거나, `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 추가
+- **API 인증 실패 (401)**: API KEY 만료 시 `/auth/login`으로 재발급
 - **MCP 미등록**: boltzgen-mcp 설치 후 `python3 setup.py` 재실행
 - **YAML 검증 실패**: chain ID 대소문자, 잔기 인덱스는 1-based (label_asym_id 기준)
   → Mol* 뷰어: https://molstar.org/viewer/
-- **API 인증 실패 (401)**: API KEY 값 확인
 - **잡 실패**: `get_job`의 `failure_message` 참고
 - **429 Concurrent limit**: 동일 `client_request_id`로 재시도 시 같은 job_id 반환
 
