@@ -36,37 +36,11 @@ claude mcp add boltzgen-mcp \
 
 > 최초 접속 시 MCP OAuth 2.1 흐름이 자동 실행되어 브라우저 인증 후 API KEY가 발급된다.
 
-## Step 0: API KEY 로드
+## Step 0: API KEY 자동 발급 + 로드
 
-**API KEY는 사용자가 직접 관리하며, 모든 tool 호출 시 인수로 전달한다.**
+**API KEY는 모든 tool 호출 시 `api_key` 인수로 전달한다.**
 
-### API KEY 취득 방법
-
-| 방법 | 설명 |
-|------|------|
-| **방법 1 (권장): OAuth 로그인** | 브라우저에서 `/auth/login` 엔드포인트 접속 → Google OAuth → API KEY 발급 |
-| **방법 2: MCP OAuth 2.1** | HTTP transport MCP 서버 최초 접속 시 자동 실행 |
-| **방법 3 (fallback): .env 수동 설정** | `~/.claude/skills/boltzgen-design/.env`에 `API_KEY=<key>` 저장 |
-
-> **참고**: @shaperon.com 계정은 자동 승인된다.
-
-### 인증 API 엔드포인트
-
-API Base URL: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io`
-
-| 엔드포인트 | 메서드 | 설명 | 응답 |
-|------------|--------|------|------|
-| `/auth/login` | GET | Google OAuth 로그인 페이지로 리다이렉트 | `{auth_url}` |
-| `/auth/callback` | GET | OAuth 콜백 (로그인 완료) | `{user_id, email, api_key, message}` |
-| `/auth/device-code` | POST | 디바이스 코드 발급 (CLI용) | `{device_code, user_code, verification_url}` |
-| `/auth/device-token` | POST | 디바이스 코드로 토큰 교환 | `{status, api_key}` |
-
-### 크로스 서비스 인증
-
-API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
-boltzgen에서 발급받은 키는 boltz2 서비스에서도 동일하게 사용 가능하다.
-
-### .env 파일에서 로드
+### .env에서 기존 키 로드
 
 ```bash
 SKILL_ENV="$HOME/.claude/skills/boltzgen-design/.env"
@@ -82,17 +56,31 @@ fi
 echo "BOLTZGEN_API_KEY=${BOLTZGEN_API_KEY}"
 ```
 
-- **값이 있으면** → 그 값을 `BOLTZGEN_API_KEY`로 사용
-- **값이 없으면** → `AskUserQuestion`으로 사용자에게 안내:
-  > "BoltzGen API KEY가 없습니다. 아래 URL에서 OAuth 로그인 후 발급받으세요:
-  > https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/auth/login
-  > 발급받은 API KEY를 입력해 주세요."
+### 키가 없으면: provision_api_key로 자동 발급
 
-  입력받은 키를 Bash로 저장 후 사용:
-  ```bash
-  mkdir -p "$HOME/.claude/skills/boltzgen-design"
-  echo "API_KEY=<입력받은값>" > "$HOME/.claude/skills/boltzgen-design/.env"
-  ```
+**값이 비어있으면** → MCP 도구 `provision_api_key()`를 호출하여 자동 발급한다.
+(MCP OAuth 2.1이 자동으로 브라우저 인증을 진행한다.)
+
+```python
+provision_api_key()
+# → {"api_key": "b2_xxxxx", "profile_email": "user@example.com", "created": true, "service": "boltzgen"}
+```
+
+반환된 `api_key`를 `.env` 파일에 저장:
+
+```bash
+mkdir -p "$HOME/.claude/skills/boltzgen-design"
+echo "API_KEY=<반환된 api_key 값>" > "$HOME/.claude/skills/boltzgen-design/.env"
+```
+
+저장된 키를 `BOLTZGEN_API_KEY` 변수에 설정하고 이후 모든 tool 호출에 `api_key=<BOLTZGEN_API_KEY>`로 전달한다.
+
+> **참고**: @shaperon.com 계정은 자동 승인된다. 그 외 계정은 관리자 승인이 필요하다.
+
+### 크로스 서비스 인증
+
+API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
+단, 키 자체는 서비스별로 분리되어 있다 (boltzgen 키는 boltzgen에서만 동작).
 
 이 단계에서 확정된 `BOLTZGEN_API_KEY` 값을 이후 **모든 tool 호출의 `api_key` 인수**로 전달한다.
 

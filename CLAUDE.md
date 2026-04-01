@@ -7,32 +7,22 @@ Claude Code 스킬: boltzgen MCP 서버를 통해 나노바디 디자인 잡을 
 boltzgen MCP 서버는 **공유 서버**다. API KEY는 사용자 각자가 취득하며,
 **모든 tool 호출 시 `api_key` 인수로 직접 전달**한다. MCP 서버 환경변수에 의존하지 않는다.
 
-### API KEY 취득 방법
+### API KEY 자동 발급 (provision_api_key)
 
-**방법 1 (권장): 브라우저 OAuth 로그인**
+Step 0에서 `.env` 파일에 키가 없으면 MCP 도구 `provision_api_key()`를 자동 호출한다.
+MCP OAuth 2.1이 브라우저 인증을 진행하고, 인증 완료 후 API KEY plaintext를 반환한다.
+반환된 키는 `~/.claude/skills/boltzgen-design/.env`에 자동 저장된다.
 
-아래 URL을 브라우저에서 열면 Google OAuth (Supabase) 로그인 후 API KEY가 발급된다:
+```python
+provision_api_key()  # → {"api_key": "b2_xxxxx", "created": true}
 ```
-https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/auth/login
-```
-콜백 페이지에서 `api_key` 값을 복사하여 `.env` 파일에 저장한다.
 
-**방법 2: MCP OAuth 2.1 (자동)**
-
-HTTP transport로 MCP 서버에 최초 접속 시 OAuth 2.1 흐름이 자동으로 실행된다.
-별도 설정 없이 API KEY가 자동 발급된다.
-
-**방법 3 (fallback): .env 파일 수동 설정**
+수동 설정도 가능:
 ```bash
 echo "API_KEY=<your-boltzgen-api-key>" > ~/.claude/skills/boltzgen-design/.env
 ```
 
-> **참고**: @shaperon.com 계정은 자동 승인된다.
-
-### 크로스 서비스 인증
-
-API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
-boltzgen `/auth/login`으로 발급받은 키는 boltz2 서비스에서도 동일하게 사용 가능하다.
+> **참고**: @shaperon.com 계정은 자동 승인. 키는 서비스별 분리 (boltzgen 키는 boltzgen 전용).
 
 ### API KEY 로드
 
@@ -66,8 +56,7 @@ claude mcp add boltzgen-mcp \
 ```
 [Step 0] API KEY 확인
   ├─ .env 파일에서 로드 (기존 키가 있는 경우)
-  ├─ 또는 /auth/login OAuth 로그인으로 발급
-  └─ 또는 MCP OAuth 2.1 자동 발급
+  └─ 없으면 → provision_api_key() 호출 → .env에 자동 저장
   ↓
 [Step 2] create_upload_url(filename, api_key=<KEY>) → asset_id + upload_url
   → Bash: curl -X PUT -T <file_path> -H "x-ms-blob-type: BlockBlob" -H "Content-Type: ..." <upload_url>
