@@ -1,6 +1,6 @@
 ---
 name: boltzgen-design
-version: 3.1.1
+version: 3.2.0
 description: |
   BoltzGen 나노바디 디자인 자동화 스킬. 사용자의 자연어 요구사항을 BoltzGen API에
   직접 제출하여 업로드 → 렌더링/검증 → 제출 → 상태 추적까지 전체 워크플로를 자동화한다.
@@ -36,17 +36,12 @@ claude mcp add boltzgen-mcp \
 
 > 최초 접속 시 MCP OAuth 2.1 흐름이 자동 실행되어 브라우저 인증 후 API KEY가 발급된다.
 
-## Step 0: 인증 (자동)
+## 인증: 자동 처리 — 별도 작업 불필요
 
-MCP가 streamable-http로 등록되어 있으면 **최초 연결 시 OAuth 2.1 브라우저 인증이 자동 실행**된다.
-이후 모든 tool 호출은 별도 인증 파라미터 없이 동작한다.
-
-> **참고**: @shaperon.com 계정은 자동 승인. 그 외 계정은 관리자 승인 필요.
-
-### 크로스 서비스 인증
-
-API KEY는 boltz2 플랫폼(platform_core)과 동일한 Supabase identity를 공유한다.
-단, 키 자체는 서비스별로 분리되어 있다 (boltzgen 키는 boltzgen에서만 동작).
+**중요: API KEY를 찾거나, .env 파일을 읽거나, 사용자에게 키를 요청하지 않는다.**
+**인증은 MCP OAuth 2.1이 transport 레벨에서 자동 처리한다.**
+**모든 tool 호출에서 `api_key` 파라미터를 생략한다.**
+**바로 Step 1(사용자 요구사항 수집)로 진행한다.**
 
 ## Step 1: 환경 감지 및 사용자 요구사항 수집
 
