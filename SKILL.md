@@ -220,39 +220,48 @@ list_workers()                         # 워커 상태 (admin)
 
 사용자가 "로그 스트리밍", "실시간 로그", "로그 보여줘" 등을 요청하면:
 
-> `get_logs`는 snapshot 방식이므로, **폴링으로 실시간처럼 보여주는 HTML artifact를 생성**한다.
-
-artifact는 MCP Streamable HTTP를 직접 호출하는 방식으로 구현한다:
-
-1. `POST <MCP_URL>` — `initialize` → `mcp-session-id` 헤더 획득
-2. `POST <MCP_URL>` + `mcp-session-id` 헤더 — `tools/call` (`get_logs`) 5초마다 반복
+> **인증 없는 공개 REST API**를 사용하여 HTML artifact에서 직접 폴링한다.
+> MCP 엔드포인트는 OAuth 인증이 필요하므로 artifact에서 호출할 수 없다.
 
 artifact에 하드코딩할 값:
-- **MCP_URL**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
+- **API_BASE**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io`
 - **JOB_ID**: 제출된 job_id
 
-```javascript
-// initialize → session ID 획득
-const initRes = await fetch(MCP_URL, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
-  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize",
-    params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "artifact", version: "1.0" } } })
-});
-const sessionId = initRes.headers.get("mcp-session-id");
+사용하는 공개 엔드포인트:
+- `GET /v1/design-jobs/{job_id}/status/public` — 상태/진행률 조회 (인증 불필요)
+- `GET /v1/design-jobs/{job_id}/logs/public?tail=50` — 로그 스트리밍 (인증 불필요)
 
-// get_logs 폴링 (5초 간격)
-async function fetchLogs() {
-  const res = await fetch(MCP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
-                "mcp-session-id": sessionId },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call",
-      params: { name: "get_logs", arguments: { job_id: JOB_ID, tail: 100 } } })
-  });
-  // SSE 파싱: "data: {...}" 라인에서 result.content[0].text 추출
+```javascript
+const API_BASE = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io";
+const JOB_ID = "<job_id>";
+
+// 상태 조회
+async function fetchStatus() {
+  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/status/public`);
+  return await res.json(); // {job_id, status, current_stage, progress_percent, status_message}
 }
-setInterval(fetchLogs, 5000);
+
+// 로그 스트리밍 (text/plain 스트림)
+async function fetchLogs() {
+  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/logs/public?tail=50`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    appendLog(decoder.decode(value));
+  }
+}
+
+// 5초마다 상태 확인 + 로그 갱신
+setInterval(async () => {
+  const status = await fetchStatus();
+  updateProgressUI(status);
+  if (["succeeded", "failed", "canceled"].includes(status.status)) {
+    clearInterval(this);
+  }
+}, 5000);
+fetchLogs(); // 최초 로그 스트림 연결
 ```
 
 ## 오류 처리
