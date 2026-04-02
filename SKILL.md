@@ -220,10 +220,11 @@ list_workers()                         # 워커 상태 (admin)
 
 사용자가 "로그 스트리밍", "실시간 로그", "로그 보여줘" 등을 요청하면:
 
-> **반드시 공개 REST API 엔드포인트를 사용한다.**
-> **절대 MCP 엔드포인트(`/mcp/mcp`)를 사용하지 않는다** — OAuth 인증 필요 + sandbox 차단.
+> **아래 HTML 템플릿을 100% 그대로 복사하여 artifact로 사용한다.**
+> **자체적으로 HTML을 작성하지 않는다. 자체적으로 MCP 호출 코드를 작성하지 않는다.**
+> **이 템플릿은 공개 REST API를 사용한다. MCP(`/mcp/mcp`)는 절대 사용하지 않는다.**
 
-아래 HTML 템플릿을 그대로 사용하되, 다음 4개 값만 교체한다:
+아래 HTML 템플릿을 **그대로 복사**하되, 다음 4개 문자열만 치환한다:
 - `JOB_ID` → 실제 job_id
 - `INIT_STATUS` → 현재 상태 (queued, running 등)
 - `INIT_STAGE` → 현재 단계 (design, inverse_folding 등, 없으면 빈 문자열)
