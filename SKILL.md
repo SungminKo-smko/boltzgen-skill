@@ -222,47 +222,179 @@ list_workers()                         # 워커 상태 (admin)
 
 > **반드시 공개 REST API 엔드포인트를 사용한다.**
 > **절대 MCP 엔드포인트(`/mcp/mcp`)를 사용하지 않는다** — OAuth 인증 필요 + sandbox 차단.
-> artifact의 fetch URL은 반드시 `/v1/design-jobs/` 경로여야 한다.
 
-artifact에 하드코딩할 값:
-- **API_BASE**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io`
-- **JOB_ID**: 제출된 job_id
+아래 HTML 템플릿을 그대로 사용하되, 다음 4개 값만 교체한다:
+- `JOB_ID` → 실제 job_id
+- `INIT_STATUS` → 현재 상태 (queued, running 등)
+- `INIT_STAGE` → 현재 단계 (design, inverse_folding 등, 없으면 빈 문자열)
+- `INIT_PROGRESS` → 현재 진행률 숫자 (0~100, 없으면 0)
 
-사용하는 공개 엔드포인트:
-- `GET /v1/design-jobs/{job_id}/status/public` — 상태/진행률 조회 (인증 불필요)
-- `GET /v1/design-jobs/{job_id}/logs/public?tail=50` — 로그 스트리밍 (인증 불필요)
+```html
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+#root { padding: 1rem 0; font-family: var(--font-sans); }
+.top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.title-block { flex: 1; }
+.title-block h3 { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+.job-id { font-size: 11px; color: var(--color-text-tertiary); font-family: var(--font-mono); }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; white-space: nowrap; }
+.b-queued   { background: var(--color-background-warning); color: var(--color-text-warning); }
+.b-running  { background: var(--color-background-info);    color: var(--color-text-info); }
+.b-succeeded{ background: var(--color-background-success); color: var(--color-text-success); }
+.b-failed   { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.b-canceled { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+.pipeline { display: flex; gap: 4px; margin-bottom: 10px; align-items: center; }
+.pstep { flex: 1; text-align: center; font-size: 10px; padding: 4px 2px; border-radius: 4px; border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-tertiary); transition: all 0.3s; }
+.pstep.done { background: var(--color-background-success); color: var(--color-text-success); border-color: transparent; }
+.pstep.active { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; font-weight: 500; }
+.parrow { font-size: 10px; color: var(--color-text-tertiary); }
+.progress-track { height: 3px; background: var(--color-background-secondary); border-radius: 2px; margin-bottom: 10px; }
+.progress-fill  { height: 100%; background: var(--color-text-info); border-radius: 2px; transition: width 0.6s ease; }
+.toolbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.btn { font-size: 12px; padding: 4px 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn-on { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+.log-wrap { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; height: 320px; overflow-y: auto; }
+.line { font-family: var(--font-mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--color-text-secondary); }
+.line.dim  { color: var(--color-text-tertiary); }
+.line.info { color: var(--color-text-info); font-weight: 500; }
+.line.ok   { color: var(--color-text-success); font-weight: 500; }
+.line.warn { color: var(--color-text-warning); }
+.line.err  { color: var(--color-text-danger); }
+.footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--color-text-tertiary); align-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; background: var(--color-text-info); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.blink { animation: blink 1.2s infinite; }
+</style>
 
-```javascript
-const API_BASE = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io";
-const JOB_ID = "<job_id>";
+<div id="root">
+  <div class="top">
+    <div class="title-block">
+      <h3>BoltzGen Log Stream</h3>
+      <div class="job-id">JOB_ID</div>
+    </div>
+    <span id="badge" class="badge b-INIT_STATUS">INIT_STATUS</span>
+  </div>
+  <div class="pipeline">
+    <div class="pstep" id="ps1">1 design</div><div class="parrow">›</div>
+    <div class="pstep" id="ps2">2 inv_fold</div><div class="parrow">›</div>
+    <div class="pstep" id="ps3">3 folding</div><div class="parrow">›</div>
+    <div class="pstep" id="ps4">4 scoring</div><div class="parrow">›</div>
+    <div class="pstep" id="ps5">5 ranking</div>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="pbar" style="width:INIT_PROGRESS%"></div></div>
+  <div class="toolbar">
+    <button class="btn btn-on" id="toggleBtn" onclick="toggle()">⏹ 정지</button>
+    <button class="btn" onclick="clearLogs()">지우기</button>
+    <span style="font-size:11px;color:var(--color-text-tertiary);margin-left:auto;" id="interval-label">5초 간격</span>
+  </div>
+  <div class="log-wrap" id="logbox"></div>
+  <div class="footer">
+    <span><span class="dot blink" id="liveDot"></span><span id="lastUpdate">로딩 중...</span></span>
+    <span id="pct-label">INIT_PROGRESS%</span>
+  </div>
+</div>
 
-// 상태 조회
-async function fetchStatus() {
-  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/status/public`);
-  return await res.json(); // {job_id, status, current_stage, progress_percent, status_message}
+<script>
+const JOB_ID = "JOB_ID";
+const API = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io";
+
+let active = true, timer = null;
+const seen = new Set();
+
+function classify(l) {
+  if (/✓|completed successfully/i.test(l)) return "ok";
+  if (/error|fail|traceback|exception/i.test(l)) return "err";
+  if (/warn|deprecated/i.test(l)) return "warn";
+  if (/\[Step \d\/5\]|Pipeline step|Running command/i.test(l)) return "info";
+  if (!l.trim() || /^\*+$/.test(l.trim())) return "dim";
+  return "";
 }
 
-// 로그 스트리밍 (text/plain 스트림)
-async function fetchLogs() {
-  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/logs/public?tail=50`);
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    appendLog(decoder.decode(value));
+function addLines(text) {
+  const box = document.getElementById("logbox");
+  let added = 0;
+  (text||"").split("\n").forEach(l => {
+    const clean = l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s+(stdout F\s+)?/,"").trimEnd();
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    const d = document.createElement("div");
+    d.className = "line " + classify(clean);
+    d.textContent = clean;
+    box.appendChild(d);
+    added++;
+  });
+  if (added) box.scrollTop = box.scrollHeight;
+}
+
+function updatePipeline(stage, pct) {
+  const map = {design:1, inverse_folding:2, folding:3, scoring:4, ranking:5};
+  const cur = map[stage] || 0;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById("ps"+i);
+    if (!el) continue;
+    el.className = "pstep" + (i < cur ? " done" : i === cur ? " active" : "");
+  }
+  if (pct != null) {
+    document.getElementById("pbar").style.width = pct + "%";
+    document.getElementById("pct-label").textContent = pct + "%";
   }
 }
 
-// 5초마다 상태 확인 + 로그 갱신
-setInterval(async () => {
-  const status = await fetchStatus();
-  updateProgressUI(status);
-  if (["succeeded", "failed", "canceled"].includes(status.status)) {
-    clearInterval(this);
+function setStatus(s) {
+  const b = document.getElementById("badge");
+  b.textContent = s; b.className = "badge b-" + s;
+  const dot = document.getElementById("liveDot");
+  if (s === "running")        { dot.style.background = "var(--color-text-info)";    dot.classList.add("blink"); }
+  else if (s === "succeeded") { dot.style.background = "var(--color-text-success)"; dot.classList.remove("blink"); }
+  else if (s === "failed")    { dot.style.background = "var(--color-text-danger)";  dot.classList.remove("blink"); }
+  else                        { dot.style.background = "var(--color-text-tertiary)"; dot.classList.remove("blink"); }
+  if (["succeeded","failed","canceled"].includes(s)) stop();
+}
+
+async function poll() {
+  try {
+    // 상태 조회 (공개 REST API — 인증 불필요)
+    const sr = await fetch(`${API}/v1/design-jobs/${JOB_ID}/status/public`);
+    if (sr.ok) {
+      const j = await sr.json();
+      if (j.status) setStatus(j.status);
+      updatePipeline(j.current_stage, j.progress_percent);
+      if (j.status_message) addLines(j.status_message);
+    }
+    // 로그 조회 (공개 REST API — 인증 불필요)
+    const lr = await fetch(`${API}/v1/design-jobs/${JOB_ID}/logs/public?tail=200`);
+    if (lr.ok) {
+      const text = await lr.text();
+      addLines(text);
+    }
+    document.getElementById("lastUpdate").textContent = "갱신: " + new Date().toLocaleTimeString("ko-KR");
+  } catch(e) {
+    addLines("[오류] " + e.message);
   }
-}, 5000);
-fetchLogs(); // 최초 로그 스트림 연결
+}
+
+function stop() {
+  active=false; clearInterval(timer);
+  document.getElementById("toggleBtn").textContent="▶ 시작";
+  document.getElementById("toggleBtn").classList.remove("btn-on");
+  document.getElementById("interval-label").textContent="정지됨";
+  document.getElementById("liveDot").classList.remove("blink");
+}
+function start() {
+  active=true;
+  document.getElementById("toggleBtn").textContent="⏹ 정지";
+  document.getElementById("toggleBtn").classList.add("btn-on");
+  document.getElementById("interval-label").textContent="5초 간격";
+  poll(); timer=setInterval(poll,5000);
+}
+function toggle() { active ? stop() : start(); }
+function clearLogs() { document.getElementById("logbox").innerHTML=""; seen.clear(); }
+
+updatePipeline("INIT_STAGE", INIT_PROGRESS);
+setStatus("INIT_STATUS");
+start();
+</script>
 ```
 
 ## 오류 처리
