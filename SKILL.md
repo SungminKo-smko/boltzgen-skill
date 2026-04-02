@@ -220,8 +220,9 @@ list_workers()                         # 워커 상태 (admin)
 
 사용자가 "로그 스트리밍", "실시간 로그", "로그 보여줘" 등을 요청하면:
 
-> **인증 없는 공개 REST API**를 사용하여 HTML artifact에서 직접 폴링한다.
-> MCP 엔드포인트는 OAuth 인증이 필요하므로 artifact에서 호출할 수 없다.
+> **반드시 공개 REST API 엔드포인트를 사용한다.**
+> **절대 MCP 엔드포인트(`/mcp/mcp`)를 사용하지 않는다** — OAuth 인증 필요 + sandbox 차단.
+> artifact의 fetch URL은 반드시 `/v1/design-jobs/` 경로여야 한다.
 
 artifact에 하드코딩할 값:
 - **API_BASE**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io`
