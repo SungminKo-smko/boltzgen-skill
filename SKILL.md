@@ -216,53 +216,36 @@ list_templates()                       # 템플릿 목록
 list_workers()                         # 워커 상태 (admin)
 ```
 
-## 로그 스트리밍 Artifact
+## 로그 확인
 
-사용자가 "로그 스트리밍", "실시간 로그", "로그 보여줘" 등을 요청하면:
+사용자가 "로그 보여줘", "실시간 로그", "진행 상태" 등을 요청하면:
 
-> **인증 없는 공개 REST API**를 사용하여 HTML artifact에서 직접 폴링한다.
-> MCP 엔드포인트는 OAuth 인증이 필요하므로 artifact에서 호출할 수 없다.
+### 방법 1: 공개 URL 링크 제시 (권장)
 
-artifact에 하드코딩할 값:
-- **API_BASE**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io`
-- **JOB_ID**: 제출된 job_id
+job_id를 사용하여 공개 URL을 구성하고 사용자에게 링크를 제시한다.
+**브라우저에서 직접 열 수 있으며, 인증 불필요.**
 
-사용하는 공개 엔드포인트:
-- `GET /v1/design-jobs/{job_id}/status/public` — 상태/진행률 조회 (인증 불필요)
-- `GET /v1/design-jobs/{job_id}/logs/public?tail=50` — 로그 스트리밍 (인증 불필요)
-
-```javascript
-const API_BASE = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io";
-const JOB_ID = "<job_id>";
-
-// 상태 조회
-async function fetchStatus() {
-  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/status/public`);
-  return await res.json(); // {job_id, status, current_stage, progress_percent, status_message}
-}
-
-// 로그 스트리밍 (text/plain 스트림)
-async function fetchLogs() {
-  const res = await fetch(`${API_BASE}/v1/design-jobs/${JOB_ID}/logs/public?tail=50`);
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    appendLog(decoder.decode(value));
-  }
-}
-
-// 5초마다 상태 확인 + 로그 갱신
-setInterval(async () => {
-  const status = await fetchStatus();
-  updateProgressUI(status);
-  if (["succeeded", "failed", "canceled"].includes(status.status)) {
-    clearInterval(this);
-  }
-}, 5000);
-fetchLogs(); // 최초 로그 스트림 연결
 ```
+로그 스트리밍:
+https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/v1/design-jobs/<job_id>/logs/public?tail=200
+
+상태 조회:
+https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/v1/design-jobs/<job_id>/status/public
+```
+
+사용자에게 이렇게 안내:
+> 아래 링크를 브라우저에서 열면 실시간 로그를 확인할 수 있습니다:
+> `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/v1/design-jobs/{job_id}/logs/public?tail=200`
+
+### 방법 2: get_logs MCP 도구 직접 호출
+
+Claude가 직접 `get_logs` MCP 도구를 호출하여 결과를 텍스트로 출력한다.
+
+```python
+get_logs(job_id="<job_id>", tail=100)
+```
+
+> **주의: HTML artifact를 생성하지 않는다.** Claude Desktop artifact sandbox는 외부 네트워크 요청을 차단하므로 fetch가 동작하지 않는다.
 
 ## 오류 처리
 
