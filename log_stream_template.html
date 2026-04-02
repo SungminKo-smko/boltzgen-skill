@@ -1,0 +1,163 @@
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+#root { padding: 1rem 0; font-family: var(--font-sans); }
+.top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.title-block { flex: 1; }
+.title-block h3 { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 3px; }
+.job-id { font-size: 11px; color: var(--color-text-tertiary); font-family: var(--font-mono); }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; white-space: nowrap; }
+.b-queued   { background: var(--color-background-warning); color: var(--color-text-warning); }
+.b-running  { background: var(--color-background-info);    color: var(--color-text-info); }
+.b-succeeded{ background: var(--color-background-success); color: var(--color-text-success); }
+.b-failed   { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.b-canceled { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+.pipeline { display: flex; gap: 4px; margin-bottom: 10px; align-items: center; }
+.pstep { flex: 1; text-align: center; font-size: 10px; padding: 4px 2px; border-radius: 4px; border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-tertiary); transition: all 0.3s; }
+.pstep.done { background: var(--color-background-success); color: var(--color-text-success); border-color: transparent; }
+.pstep.active { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; font-weight: 500; }
+.parrow { font-size: 10px; color: var(--color-text-tertiary); }
+.progress-track { height: 3px; background: var(--color-background-secondary); border-radius: 2px; margin-bottom: 10px; }
+.progress-fill  { height: 100%; background: var(--color-text-info); border-radius: 2px; transition: width 0.6s ease; }
+.toolbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.btn { font-size: 12px; padding: 4px 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn-on { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+.log-wrap { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; height: 320px; overflow-y: auto; }
+.line { font-family: var(--font-mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--color-text-secondary); }
+.line.dim  { color: var(--color-text-tertiary); }
+.line.info { color: var(--color-text-info); font-weight: 500; }
+.line.ok   { color: var(--color-text-success); font-weight: 500; }
+.line.warn { color: var(--color-text-warning); }
+.line.err  { color: var(--color-text-danger); }
+.footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--color-text-tertiary); align-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; background: var(--color-text-info); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.blink { animation: blink 1.2s infinite; }
+</style>
+
+<div id="root">
+  <div class="top">
+    <div class="title-block">
+      <h3>BoltzGen Log Stream</h3>
+      <div class="job-id">__JOB_ID__</div>
+    </div>
+    <span id="badge" class="badge b-__INIT_STATUS__">__INIT_STATUS__</span>
+  </div>
+  <div class="pipeline">
+    <div class="pstep" id="ps1">1 design</div><div class="parrow">›</div>
+    <div class="pstep" id="ps2">2 inv_fold</div><div class="parrow">›</div>
+    <div class="pstep" id="ps3">3 folding</div><div class="parrow">›</div>
+    <div class="pstep" id="ps4">4 scoring</div><div class="parrow">›</div>
+    <div class="pstep" id="ps5">5 ranking</div>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="pbar" style="width:__INIT_PROGRESS__%"></div></div>
+  <div class="toolbar">
+    <button class="btn btn-on" id="toggleBtn" onclick="toggle()">⏹ 정지</button>
+    <button class="btn" onclick="clearLogs()">지우기</button>
+    <span style="font-size:11px;color:var(--color-text-tertiary);margin-left:auto;" id="interval-label">5초 간격</span>
+  </div>
+  <div class="log-wrap" id="logbox"></div>
+  <div class="footer">
+    <span><span class="dot blink" id="liveDot"></span><span id="lastUpdate">로딩 중...</span></span>
+    <span id="pct-label">__INIT_PROGRESS__%</span>
+  </div>
+</div>
+
+<script>
+const JOB_ID = "__JOB_ID__";
+const API = "https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io";
+
+let active = true, timer = null;
+const seen = new Set();
+
+function classify(l) {
+  if (/✓|completed successfully/i.test(l)) return "ok";
+  if (/error|fail|traceback|exception/i.test(l)) return "err";
+  if (/warn|deprecated/i.test(l)) return "warn";
+  if (/\[Step \d\/5\]|Pipeline step|Running command/i.test(l)) return "info";
+  if (!l.trim() || /^\*+$/.test(l.trim())) return "dim";
+  return "";
+}
+
+function addLines(text) {
+  const box = document.getElementById("logbox");
+  let added = 0;
+  (text||"").split("\n").forEach(l => {
+    const clean = l.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s+(stdout F\s+)?/,"").trimEnd();
+    if (!clean || seen.has(clean)) return;
+    seen.add(clean);
+    const d = document.createElement("div");
+    d.className = "line " + classify(clean);
+    d.textContent = clean;
+    box.appendChild(d);
+    added++;
+  });
+  if (added) box.scrollTop = box.scrollHeight;
+}
+
+function updatePipeline(stage, pct) {
+  const map = {design:1, inverse_folding:2, folding:3, scoring:4, ranking:5};
+  const cur = map[stage] || 0;
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById("ps"+i);
+    if (!el) continue;
+    el.className = "pstep" + (i < cur ? " done" : i === cur ? " active" : "");
+  }
+  if (pct != null) {
+    document.getElementById("pbar").style.width = pct + "%";
+    document.getElementById("pct-label").textContent = pct + "%";
+  }
+}
+
+function setStatus(s) {
+  const b = document.getElementById("badge");
+  b.textContent = s; b.className = "badge b-" + s;
+  const dot = document.getElementById("liveDot");
+  if (s === "running")        { dot.style.background = "var(--color-text-info)";    dot.classList.add("blink"); }
+  else if (s === "succeeded") { dot.style.background = "var(--color-text-success)"; dot.classList.remove("blink"); }
+  else if (s === "failed")    { dot.style.background = "var(--color-text-danger)";  dot.classList.remove("blink"); }
+  else                        { dot.style.background = "var(--color-text-tertiary)"; dot.classList.remove("blink"); }
+  if (["succeeded","failed","canceled"].includes(s)) stop();
+}
+
+async function poll() {
+  try {
+    const sr = await fetch(`${API}/v1/design-jobs/${JOB_ID}/status/public`);
+    if (sr.ok) {
+      const j = await sr.json();
+      if (j.status) setStatus(j.status);
+      updatePipeline(j.current_stage, j.progress_percent);
+      if (j.status_message) addLines(j.status_message);
+    }
+    const lr = await fetch(`${API}/v1/design-jobs/${JOB_ID}/logs/public?tail=200`);
+    if (lr.ok) {
+      const text = await lr.text();
+      addLines(text);
+    }
+    document.getElementById("lastUpdate").textContent = "갱신: " + new Date().toLocaleTimeString("ko-KR");
+  } catch(e) {
+    addLines("[오류] " + e.message);
+  }
+}
+
+function stop() {
+  active=false; clearInterval(timer);
+  document.getElementById("toggleBtn").textContent="▶ 시작";
+  document.getElementById("toggleBtn").classList.remove("btn-on");
+  document.getElementById("interval-label").textContent="정지됨";
+  document.getElementById("liveDot").classList.remove("blink");
+}
+function start() {
+  active=true;
+  document.getElementById("toggleBtn").textContent="⏹ 정지";
+  document.getElementById("toggleBtn").classList.add("btn-on");
+  document.getElementById("interval-label").textContent="5초 간격";
+  poll(); timer=setInterval(poll,5000);
+}
+function toggle() { active ? stop() : start(); }
+function clearLogs() { document.getElementById("logbox").innerHTML=""; seen.clear(); }
+
+updatePipeline("__INIT_STAGE__", __INIT_PROGRESS__);
+setStatus("__INIT_STATUS__");
+start();
+</script>
