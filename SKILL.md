@@ -216,23 +216,44 @@ list_templates()                       # 템플릿 목록
 list_workers()                         # 워커 상태 (admin)
 ```
 
-## 로그 스트리밍
+## 로그 스트리밍 Artifact
 
 사용자가 "로그 스트리밍", "실시간 로그", "로그 보여줘" 등을 요청하면:
 
-`get_logs` MCP 도구를 10초 간격으로 반복 호출하여 결과를 출력한다.
-**HTML artifact를 생성하지 않는다** (MCP 서버에 대한 브라우저 직접 호출은 CORS로 차단됨).
+> `get_logs`는 snapshot 방식이므로, **폴링으로 실시간처럼 보여주는 HTML artifact를 생성**한다.
 
-```python
-# 10초 간격으로 get_logs 반복 호출
-while True:
-    result = get_logs(job_id="<job_id>", tail=50)
-    # 새 로그가 있으면 출력
-    # job 상태가 succeeded/failed이면 중단
-    # 10초 대기 후 반복
+artifact는 MCP Streamable HTTP를 직접 호출하는 방식으로 구현한다:
+
+1. `POST <MCP_URL>` — `initialize` → `mcp-session-id` 헤더 획득
+2. `POST <MCP_URL>` + `mcp-session-id` 헤더 — `tools/call` (`get_logs`) 5초마다 반복
+
+artifact에 하드코딩할 값:
+- **MCP_URL**: `https://nanobody-aca-api.politebay-55ff119b.westus3.azurecontainerapps.io/mcp/mcp`
+- **JOB_ID**: 제출된 job_id
+
+```javascript
+// initialize → session ID 획득
+const initRes = await fetch(MCP_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+  body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize",
+    params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "artifact", version: "1.0" } } })
+});
+const sessionId = initRes.headers.get("mcp-session-id");
+
+// get_logs 폴링 (5초 간격)
+async function fetchLogs() {
+  const res = await fetch(MCP_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+                "mcp-session-id": sessionId },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call",
+      params: { name: "get_logs", arguments: { job_id: JOB_ID, tail: 100 } } })
+  });
+  // SSE 파싱: "data: {...}" 라인에서 result.content[0].text 추출
+}
+setInterval(fetchLogs, 5000);
 ```
-
-사용자에게 "로그를 10초마다 갱신합니다. 중단하려면 알려주세요." 안내 후 폴링 시작.
 
 ## 오류 처리
 
